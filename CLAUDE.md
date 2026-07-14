@@ -93,6 +93,8 @@ uv run lint-imports   # verificar regla de capas
 uv run alembic upgrade head                                # migrar la BD
 uv run python -m nomina.infraestructura.persistencia.sembrar   # sembrar parámetros
 uv run uvicorn nomina.infraestructura.api.app:crear_app --factory --reload --port 8001  # API
+# primer usuario (la contraseña se pide por consola o va en NOMINA_ADMIN_PASSWORD):
+uv run python -m nomina.infraestructura.seguridad.crear_admin --email admin@ejemplo.com
 ```
 
 ```bash
@@ -116,8 +118,13 @@ por eso el dev server usa 5174 y el backend 8001.
 - [x] **Fase 3:** UI React+Vite (grilla quincenal editable, liquidación con desglose,
       configuración de parámetros/festivos, entidades) y exportación a Excel con el
       formato de la contadora (hoja por empleado + resumen).
-- [ ] **Fase 4:** autenticación, roles, auditoría, cierre de quincenas, hardening.
+- [x] **Fase 4:** autenticación (Argon2id + sesiones con cookie HttpOnly, token hasheado
+      en BD), roles jerárquicos operador ⊂ contadora ⊂ admin verificados en backend,
+      auditoría append-only (triggers de BD bloquean UPDATE/DELETE), cierre definitivo
+      de quincenas, rate limiting en login y cabeceras de seguridad.
 
-Trabajar **una fase a la vez** y detenerse para revisión del usuario al final de cada una.
+**Todas las fases del plan original están completas.** Pendientes de negocio (ver
+memoria/docs): confirmar con la contadora los factores combinados y su regla real de
+clasificación de extras, y verificar el auxilio de transporte 2026 contra el decreto.
 Los valores legales de referencia (tabla en `docs/arquitectura.md`) deben verificarse
 contra fuente oficial antes de producción.

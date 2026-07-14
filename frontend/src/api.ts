@@ -4,17 +4,26 @@ import type {
   Liquidacion,
   Parametro,
   Periodo,
+  RegistroAuditoria,
+  Rol,
   Turno,
   Unidad,
+  Usuario,
 } from "./tipos";
 
 const BASE = "/api";
+
+/** Se dispara cuando el backend responde 401 (sesión vencida o inexistente). */
+export const EVENTO_NO_AUTENTICADO = "nomina:no-autenticado";
 
 async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
   const respuesta = await fetch(BASE + ruta, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
+  if (respuesta.status === 401 && !ruta.startsWith("/auth/")) {
+    window.dispatchEvent(new Event(EVENTO_NO_AUTENTICADO));
+  }
   if (!respuesta.ok) {
     const cuerpo = await respuesta.json().catch(() => ({ detail: respuesta.statusText }));
     const detalle =
@@ -28,6 +37,22 @@ async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
 const json = (datos: unknown) => JSON.stringify(datos);
 
 export const api = {
+  auth: {
+    login: (email: string, contrasena: string) =>
+      pedir<Usuario>("/auth/login", { method: "POST", body: json({ email, contrasena }) }),
+    logout: () => pedir<void>("/auth/logout", { method: "POST" }),
+    yo: () => pedir<Usuario>("/auth/yo"),
+  },
+  usuarios: {
+    listar: () => pedir<Usuario[]>("/usuarios"),
+    crear: (datos: { email: string; contrasena: string; rol: Rol }) =>
+      pedir<Usuario>("/usuarios", { method: "POST", body: json(datos) }),
+    desactivar: (id: string) =>
+      pedir<Usuario>(`/usuarios/${id}/desactivar`, { method: "POST" }),
+  },
+  auditoria: {
+    listar: (limite = 100) => pedir<RegistroAuditoria[]>(`/auditoria?limite=${limite}`),
+  },
   unidades: {
     listar: () => pedir<Unidad[]>("/unidades"),
     crear: (datos: { nombre: string; nit: string }) =>
@@ -49,6 +74,7 @@ export const api = {
     crear: (datos: { fecha_inicio: string; fecha_fin: string }) =>
       pedir<Periodo>("/periodos", { method: "POST", body: json(datos) }),
     reabrir: (id: string) => pedir<Periodo>(`/periodos/${id}/reabrir`, { method: "POST" }),
+    cerrar: (id: string) => pedir<Periodo>(`/periodos/${id}/cerrar`, { method: "POST" }),
     turnos: (id: string, unidadId?: string) =>
       pedir<Turno[]>(`/periodos/${id}/turnos${unidadId ? `?unidad_id=${unidadId}` : ""}`),
     liquidar: (id: string, unidadId: string) =>

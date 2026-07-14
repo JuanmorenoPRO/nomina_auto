@@ -169,6 +169,16 @@ class RepositorioTurnosSQL:
         )
         self.session.flush()
 
+    def obtener(self, id: UUID) -> TurnoRegistrado | None:
+        m = self.session.get(TurnoModel, id)
+        if m is None:
+            return None
+        return TurnoRegistrado(
+            id=m.id,
+            empleado_id=m.empleado_id,
+            turno=Turno(fecha=m.fecha, hora_inicio=m.hora_inicio, hora_fin=m.hora_fin),
+        )
+
     def eliminar(self, id: UUID) -> bool:
         m = self.session.get(TurnoModel, id)
         if m is None:

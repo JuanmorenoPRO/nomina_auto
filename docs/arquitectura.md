@@ -296,6 +296,6 @@ Datos protegidos por Ley 1581/2012 (habeas data): cédulas y salarios.
 | 1 | Dominio puro + motor + festivos + golden tests + CLI | pendiente |
 | 2 | Persistencia, parámetros con vigencias, casos de uso, API | ✅ |
 | 3 | UI: grilla quincenal, configuración, reportes, Excel | ✅ |
-| 4 | Auth, roles, auditoría, cierre de quincenas, hardening | pendiente |
+| 4 | Auth, roles, auditoría, cierre de quincenas, hardening | ✅ |
 
 Una fase a la vez, con revisión del usuario al final de cada una.

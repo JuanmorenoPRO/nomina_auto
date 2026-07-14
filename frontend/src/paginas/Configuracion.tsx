@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Festivo, Parametro } from "../tipos";
+import type { Festivo, Parametro, RegistroAuditoria, Rol, Usuario } from "../tipos";
 
 const NOMBRES_PARAMETROS: Record<string, string> = {
   jornada_nocturna_inicio: "Inicio de jornada nocturna",
@@ -22,6 +22,149 @@ export function Configuracion() {
     <>
       <SeccionParametros />
       <SeccionFestivos />
+      <SeccionUsuarios />
+      <SeccionAuditoria />
+    </>
+  );
+}
+
+function SeccionUsuarios() {
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({ email: "", contrasena: "", rol: "operador" as Rol });
+
+  const recargar = useCallback(
+    () => api.usuarios.listar().then(setUsuarios).catch((e) => setError(e.message)),
+    [],
+  );
+  useEffect(() => {
+    recargar();
+  }, [recargar]);
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      await api.usuarios.crear(form);
+      setForm({ email: "", contrasena: "", rol: "operador" });
+      await recargar();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function desactivar(id: string | null) {
+    if (!id || !window.confirm("¿Desactivar este usuario? Sus sesiones se cierran.")) return;
+    setError("");
+    try {
+      await api.usuarios.desactivar(id);
+      await recargar();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <>
+      <h2>Usuarios</h2>
+      <p className="pista">
+        Roles: <b>operador</b> solo ingresa turnos · <b>contadora</b> además liquida y
+        exporta · <b>admin</b> además administra parámetros y usuarios.
+      </p>
+      <form className="fila tarjeta" onSubmit={crear}>
+        <label className="campo">
+          Correo
+          <input
+            required
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </label>
+        <label className="campo">
+          Contraseña (mínimo 10)
+          <input
+            required
+            type="password"
+            minLength={10}
+            autoComplete="new-password"
+            value={form.contrasena}
+            onChange={(e) => setForm({ ...form, contrasena: e.target.value })}
+          />
+        </label>
+        <label className="campo">
+          Rol
+          <select
+            value={form.rol}
+            onChange={(e) => setForm({ ...form, rol: e.target.value as Rol })}
+          >
+            <option value="operador">operador</option>
+            <option value="contadora">contadora</option>
+            <option value="admin">admin</option>
+          </select>
+        </label>
+        <button className="principal" type="submit">Crear usuario</button>
+      </form>
+      {error && <div className="error">{error}</div>}
+      <table className="datos">
+        <thead>
+          <tr><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody>
+          {usuarios.map((u) => (
+            <tr key={u.email}>
+              <td>{u.email}</td>
+              <td>{u.rol}</td>
+              <td>{u.activo ? "activo" : "inactivo"}</td>
+              <td>
+                {u.activo && (
+                  <button className="secundario" onClick={() => desactivar(u.id)}>
+                    Desactivar
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function SeccionAuditoria() {
+  const [registros, setRegistros] = useState<RegistroAuditoria[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.auditoria.listar(100).then(setRegistros).catch((e) => setError(e.message));
+  }, []);
+
+  return (
+    <>
+      <h2>Auditoría (últimos 100 registros)</h2>
+      <p className="pista">Registro inmutable: la base de datos rechaza modificaciones.</p>
+      {error && <div className="error">{error}</div>}
+      <table className="datos">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {registros.map((r, i) => (
+            <tr key={i}>
+              <td>{new Date(r.timestamp).toLocaleString("es-CO")}</td>
+              <td>{r.usuario_email}</td>
+              <td>{r.accion}</td>
+              <td>{r.entidad}</td>
+              <td>
+                {r.antes && <>antes: {JSON.stringify(r.antes)} </>}
+                {r.despues && <>después: {JSON.stringify(r.despues)}</>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }

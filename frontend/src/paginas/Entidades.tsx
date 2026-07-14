@@ -215,6 +215,21 @@ function SeccionPeriodos({ periodos, alCambiar, setError }: Props & { periodos: 
     }
   }
 
+  async function cerrar(id: string) {
+    const seguro = window.confirm(
+      "¿Cerrar definitivamente esta quincena? Quedará en SOLO LECTURA para siempre: " +
+        "no podrá reabrirse, ni modificar turnos, ni reliquidar.",
+    );
+    if (!seguro) return;
+    setError("");
+    try {
+      await api.periodos.cerrar(id);
+      await alCambiar();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div className="tarjeta">
       <h2>Periodos de liquidación (quincenas)</h2>
@@ -251,9 +266,14 @@ function SeccionPeriodos({ periodos, alCambiar, setError }: Props & { periodos: 
               <td><span className={`insignia ${p.estado}`}>{p.estado}</span></td>
               <td>
                 {p.estado === "liquidado" && (
-                  <button className="secundario" onClick={() => reabrir(p.id)}>
-                    Reabrir para corregir
-                  </button>
+                  <>
+                    <button className="secundario" onClick={() => reabrir(p.id)}>
+                      Reabrir para corregir
+                    </button>{" "}
+                    <button className="secundario" onClick={() => cerrar(p.id)}>
+                      Cerrar definitivamente
+                    </button>
+                  </>
                 )}
               </td>
             </tr>

@@ -1,5 +1,24 @@
 // Tipos espejo de los schemas del backend.
 
+export type Rol = "operador" | "contadora" | "admin";
+
+export interface Usuario {
+  id: string | null;
+  email: string;
+  rol: Rol;
+  activo: boolean;
+}
+
+export interface RegistroAuditoria {
+  usuario_email: string;
+  accion: string;
+  entidad: string;
+  entidad_id: string;
+  antes: Record<string, unknown> | null;
+  despues: Record<string, unknown> | null;
+  timestamp: string;
+}
+
 export interface Unidad {
   id: string;
   nombre: string;

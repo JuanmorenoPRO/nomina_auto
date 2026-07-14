@@ -132,6 +132,43 @@ class LiquidacionEmpleadoModel(Base):
     )
 
 
+class UsuarioModel(Base):
+    __tablename__ = "usuario"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(200), unique=True)
+    hash_password: Mapped[str] = mapped_column(String(255))  # Argon2id
+    rol: Mapped[str] = mapped_column(String(10))
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class SesionModel(Base):
+    """Sesiones con expiración. Se guarda el SHA-256 del token, nunca el token."""
+
+    __tablename__ = "sesion"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    usuario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("usuario.id"), index=True)
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    creada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora_utc)
+
+
+class AuditoriaModel(Base):
+    """Registro append-only (RF7): triggers de BD bloquean UPDATE y DELETE."""
+
+    __tablename__ = "auditoria"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    usuario_email: Mapped[str] = mapped_column(String(200))
+    accion: Mapped[str] = mapped_column(String(40))
+    entidad: Mapped[str] = mapped_column(String(40))
+    entidad_id: Mapped[str] = mapped_column(String(40), default="")
+    antes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    despues: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora_utc)
+
+
 class ConceptoLiquidadoModel(Base):
     __tablename__ = "concepto_liquidado"
 
