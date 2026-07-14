@@ -11,6 +11,24 @@ class ParametroNoVigenteError(LookupError):
     """No existe un valor vigente del parámetro para la fecha consultada."""
 
 
+# Códigos administrables desde configuración (RF5). Rechazar códigos desconocidos
+# evita typos que dejarían al motor sin parámetro vigente.
+CODIGOS_PARAMETROS = frozenset({
+    "jornada_nocturna_inicio",
+    "jornada_nocturna_fin",
+    "recargo_nocturno",
+    "extra_diurna",
+    "extra_nocturna",
+    "recargo_dominical_festivo",
+    "jornada_maxima_semanal",
+    "horas_quincena",
+    "divisor_hora_ordinaria",
+    "tope_horas_extra_dia",
+    "auxilio_transporte_mensual",
+    "estrategia_clasificacion_extras",
+})
+
+
 @dataclass(frozen=True)
 class ParametroLegal:
     """Un valor legal con su vigencia. El valor se guarda como texto y se

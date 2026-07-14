@@ -294,7 +294,7 @@ Datos protegidos por Ley 1581/2012 (habeas data): cédulas y salarios.
 |---|---|---|
 | 0 | Arquitectura, modelo de datos, esqueleto, CLAUDE.md | ✅ |
 | 1 | Dominio puro + motor + festivos + golden tests + CLI | pendiente |
-| 2 | Persistencia, parámetros con vigencias, casos de uso, API | pendiente |
+| 2 | Persistencia, parámetros con vigencias, casos de uso, API | ✅ |
 | 3 | UI: grilla quincenal, configuración, reportes, Excel | pendiente |
 | 4 | Auth, roles, auditoría, cierre de quincenas, hardening | pendiente |
 

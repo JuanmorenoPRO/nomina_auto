@@ -86,10 +86,13 @@ dominio  ←  aplicacion  ←  infraestructura
 
 ```bash
 cd backend
-uv sync          # instalar dependencias
-uv run pytest    # tests (cobertura mínima 90% en dominio)
+uv sync               # instalar dependencias
+uv run pytest         # tests (cobertura mínima 90% en dominio)
 uv run ruff check .
 uv run lint-imports   # verificar regla de capas
+uv run alembic upgrade head                                # migrar la BD
+uv run python -m nomina.infraestructura.persistencia.sembrar   # sembrar parámetros
+uv run uvicorn nomina.infraestructura.api.app:crear_app --factory --reload  # API
 ```
 
 ## Estado del plan por fases
@@ -97,7 +100,9 @@ uv run lint-imports   # verificar regla de capas
 - [x] **Fase 0:** arquitectura, modelo de datos, estructura de carpetas, este archivo.
 - [x] **Fase 1:** dominio puro + segmentación + cálculo + calendario de festivos + golden
       tests + CLI mínimo (`uv run python -m nomina.cli --help`). Sin BD ni UI.
-- [ ] **Fase 2:** persistencia, parámetros con vigencias, casos de uso, API.
+- [x] **Fase 2:** persistencia (SQLAlchemy + Alembic), parámetros con vigencias en BD,
+      casos de uso (RegistrarTurno, LiquidarQuincena versionada con snapshot,
+      ActualizarParametro) y API FastAPI. Sin autenticación aún (Fase 4).
 - [ ] **Fase 3:** UI (grilla quincenal, configuración, reportes, Excel).
 - [ ] **Fase 4:** autenticación, roles, auditoría, cierre de quincenas, hardening.
 

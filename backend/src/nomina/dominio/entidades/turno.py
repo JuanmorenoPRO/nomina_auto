@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from uuid import UUID
 
 from nomina.dominio.valores.tiempo import BOGOTA
 
@@ -31,6 +32,15 @@ class Turno:
     def minutos(self) -> int:
         inicio, fin = self.intervalo()
         return int((fin - inicio).total_seconds() // 60)
+
+
+@dataclass(frozen=True)
+class TurnoRegistrado:
+    """Turno persistido: identidad + empleado + el intervalo puro."""
+
+    id: UUID
+    empleado_id: UUID
+    turno: Turno
 
 
 def validar_sin_solapamientos(turnos: list[Turno]) -> None:
