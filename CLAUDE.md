@@ -92,8 +92,18 @@ uv run ruff check .
 uv run lint-imports   # verificar regla de capas
 uv run alembic upgrade head                                # migrar la BD
 uv run python -m nomina.infraestructura.persistencia.sembrar   # sembrar parámetros
-uv run uvicorn nomina.infraestructura.api.app:crear_app --factory --reload  # API
+uv run uvicorn nomina.infraestructura.api.app:crear_app --factory --reload --port 8001  # API
 ```
+
+```bash
+cd frontend
+npm install      # usa .npmrc del proyecto (registro público, no el corporativo)
+npm run dev      # UI en http://localhost:5174 con proxy /api → backend :8001
+npm run build    # verificación de tipos (tsc estricto) + build
+```
+
+Nota de esta máquina: los puertos 5173 y 8000 los ocupa otra app en Docker;
+por eso el dev server usa 5174 y el backend 8001.
 
 ## Estado del plan por fases
 
@@ -103,7 +113,9 @@ uv run uvicorn nomina.infraestructura.api.app:crear_app --factory --reload  # AP
 - [x] **Fase 2:** persistencia (SQLAlchemy + Alembic), parámetros con vigencias en BD,
       casos de uso (RegistrarTurno, LiquidarQuincena versionada con snapshot,
       ActualizarParametro) y API FastAPI. Sin autenticación aún (Fase 4).
-- [ ] **Fase 3:** UI (grilla quincenal, configuración, reportes, Excel).
+- [x] **Fase 3:** UI React+Vite (grilla quincenal editable, liquidación con desglose,
+      configuración de parámetros/festivos, entidades) y exportación a Excel con el
+      formato de la contadora (hoja por empleado + resumen).
 - [ ] **Fase 4:** autenticación, roles, auditoría, cierre de quincenas, hardening.
 
 Trabajar **una fase a la vez** y detenerse para revisión del usuario al final de cada una.

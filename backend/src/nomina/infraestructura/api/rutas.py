@@ -8,9 +8,11 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from nomina.aplicacion.casos_uso.actualizar_parametro import ActualizarParametro
+from nomina.aplicacion.casos_uso.exportar_liquidacion import ExportarLiquidacion
 from nomina.aplicacion.casos_uso.liquidar_quincena import LiquidarQuincena
 from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
 from nomina.dominio.entidades.empleado import Empleado
@@ -18,6 +20,7 @@ from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoL
 from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
 from nomina.dominio.servicios.calendario_festivos import festivos_por_ley
 from nomina.infraestructura.api import schemas, traductores
+from nomina.infraestructura.excel.exportador import exportar_liquidacion_excel
 from nomina.infraestructura.persistencia.base import sesion
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioEmpleadosSQL,
@@ -247,3 +250,17 @@ def obtener_liquidacion(liquidacion_id: UUID, session: Sesion):
     if liquidacion is None:
         raise HTTPException(404, "No existe la liquidación")
     return traductores.liquidacion_a_schema(liquidacion)
+
+
+@router.get("/liquidaciones/{liquidacion_id}/excel")
+def descargar_liquidacion_excel(liquidacion_id: UUID, session: Sesion) -> Response:
+    caso = ExportarLiquidacion(
+        liquidaciones=RepositorioLiquidacionesSQL(session),
+        exportador=exportar_liquidacion_excel,
+    )
+    contenido, nombre = caso.ejecutar(liquidacion_id)
+    return Response(
+        content=contenido,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
