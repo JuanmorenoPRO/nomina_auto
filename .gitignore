@@ -1,0 +1,28 @@
+# Secretos — NUNCA versionar credenciales
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Bases de datos locales
+*.sqlite3
+*.db
+
+# Node / frontend (Fase 3)
+node_modules/
+dist/
+
+# Editores y SO
+.DS_Store
+.idea/
+.vscode/
