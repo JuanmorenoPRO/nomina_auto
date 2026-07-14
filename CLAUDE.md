@@ -56,9 +56,13 @@ dominio  ←  aplicacion  ←  infraestructura
 3. **Clasificación extra/ordinaria:** estrategia parametrizable
    (`estrategia_clasificacion_extras`): `presupuesto_quincenal` (default, 110 h) o
    `semanal_legal` (44/42 h por semana).
-4. **Factores componibles:** factor = `1 + Σ componentes` aditivos (ej. extra nocturna
-   dominical = 1 + extra_nocturna + recargo_dominical). Nunca una lista plana de
-   porcentajes combinados a mano.
+4. **Modelo de pago ADICIONAL al salario** (calibrado con la planilla real de la
+   contadora): el salario quincenal (110 h × tarifa = salario/2) cubre las horas
+   ordinarias; cada tramo paga solo el factor adicional componible. Una nocturna
+   ordinaria paga 0.35; una hora en dominical/festivo paga `1 + recargo` (la hora
+   completa de nuevo, porque el descanso ya estaba remunerado); una extra nocturna
+   dominical paga `1 + extra_nocturna + recargo_dominical`. Nunca una lista plana
+   de porcentajes combinados a mano. Detalle en `docs/arquitectura.md` §5.3.
 
 ## Glosario del dominio
 
@@ -91,8 +95,8 @@ uv run lint-imports   # verificar regla de capas
 ## Estado del plan por fases
 
 - [x] **Fase 0:** arquitectura, modelo de datos, estructura de carpetas, este archivo.
-- [ ] **Fase 1:** dominio puro + segmentación + cálculo + calendario de festivos + golden
-      tests + CLI mínimo. Sin BD ni UI.
+- [x] **Fase 1:** dominio puro + segmentación + cálculo + calendario de festivos + golden
+      tests + CLI mínimo (`uv run python -m nomina.cli --help`). Sin BD ni UI.
 - [ ] **Fase 2:** persistencia, parámetros con vigencias, casos de uso, API.
 - [ ] **Fase 3:** UI (grilla quincenal, configuración, reportes, Excel).
 - [ ] **Fase 4:** autenticación, roles, auditoría, cierre de quincenas, hardening.

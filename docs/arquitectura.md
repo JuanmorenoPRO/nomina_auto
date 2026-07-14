@@ -152,9 +152,13 @@ Siempre se auditan: cambios de parámetros legales y ediciones de turnos ya liqu
 | `jornada_maxima_semanal` | 44 | 15-jul-2025 → 14-jul-2026 | Ley 2101/2021 |
 | `jornada_maxima_semanal` | 42 | desde 15-jul-2026 | Ley 2101/2021 |
 | `horas_quincena` | 110 | vigente | práctica actual |
-| `divisor_hora_ordinaria` | 220 | vigente | horas mes para tarifa |
+| `divisor_hora_ordinaria` | 220 | vigente | confirmado en planilla contadora |
 | `tope_horas_extra_dia` | 2 | vigente | CST art. 22 / Ley 6ª/1981 |
+| `auxilio_transporte_mensual` | 200.000 / 249.095 | 2025 / desde 2026 | decreto anual (verificar) |
 | `estrategia_clasificacion_extras` | `presupuesto_quincenal` | vigente | decisión de negocio |
+
+La semilla completa (incluidas vigencias históricas: jornada nocturna 21:00 antes del
+25-dic-2025, dominical 75% antes del 1-jul-2025) está en `backend/src/nomina/semilla.py`.
 
 Para el periodo anterior al 25-dic-2025 se siembra también la jornada nocturna previa
 (21:00–06:00) si se necesitan liquidaciones históricas.
@@ -199,28 +203,45 @@ Si el umbral cae dentro de un tramo, el tramo se parte en dos. La clasificación
 franja y tipo de día: una extra nocturna dominical sigue siendo identificable. El golden
 test 5 (quincena que cruza el 15-jul-2026) se prueba con ambas estrategias.
 
-### 5.3 Factores componibles
+### 5.3 Factores componibles — modelo de pago ADICIONAL al salario
 
-Cada tramo clasificado produce un `ConceptoLiquidado` con
-`factor = 1 + Σ componentes` aditivos e independientes — nunca una lista plana de
-porcentajes precombinados:
+Calibrado contra la planilla real de la contadora (`NOMINA MAYO THUNAPA.xlsx`):
+el salario quincenal (`horas_quincena` × tarifa = salario/2) ya paga las horas
+ordinarias, caigan donde caigan. Cada tramo genera entonces un pago **adicional**
+cuyo factor es la suma de componentes independientes:
 
-| Concepto | Componentes | Factor hoy |
+- `hora_base` (1.0): la hora no está cubierta por el salario — aplica a toda hora
+  **extra** y a toda hora en **dominical/festivo** (el descanso ya estaba remunerado
+  en el salario; trabajarlo se paga de nuevo, más el recargo).
+- `recargo_dominical_festivo`: horas en domingo o festivo.
+- `recargo_nocturno`: horas nocturnas no extra.
+- `extra_diurna` / `extra_nocturna`: horas extra según franja.
+
+| Concepto (etiqueta de la contadora) | Componentes | Factor adicional hoy |
 |---|---|---|
-| Ordinaria diurna | — | 1.00 |
-| Ordinaria nocturna (recargo nocturno) | +recargo_nocturno | 1.35 |
-| Extra diurna | +extra_diurna | 1.25 |
-| Extra nocturna | +extra_nocturna | 1.75 |
-| Dominical/festivo diurna | +recargo_dominical_festivo | 1.80 → 1.90 (1-jul-2026) |
-| Dominical/festivo nocturna | +recargo_dominical_festivo +recargo_nocturno | 2.15 |
-| Extra diurna dominical/festivo | +extra_diurna +recargo_dominical_festivo | 2.05 |
-| Extra nocturna dominical/festivo | +extra_nocturna +recargo_dominical_festivo | 2.55 |
+| TIEMPO ORDINARIO (base, 110 h) | salario/2 | — |
+| Ordinaria diurna día ordinario | — | 0 (cubierta) |
+| TIEMPO NOCTURNO (recargo) | recargo_nocturno | 0.35 |
+| EXTRA DIURNA | 1 + extra_diurna | 1.25 |
+| TIEMPO EXTRA NOCTURNO | 1 + extra_nocturna | 1.75 |
+| TIEMPO FESTIVO (diurno) | 1 + recargo_dominical | 1.80 → 1.90 (1-jul-2026) |
+| TIEMPO NOCTURNO DOMINICAL/FESTIVO | 1 + recargo_dominical + recargo_nocturno | 2.15 → 2.25 |
+| TIEMPO FESTIVO EXTRA (extra diurna) | 1 + extra_diurna + recargo_dominical | 2.05 → 2.15 |
+| TIEMPO EXTRA NOCTURNO DOMINICAL/FESTIVO | 1 + extra_nocturna + recargo_dominical | 2.55 → 2.65 |
+| AUXILIO DE TRANSPORTE | auxilio_transporte_mensual / 2 | — |
 
 Cada componente se resuelve contra la vigencia de la **fecha del tramo** (no la fecha del
 sistema ni la de liquidación).
 
 `valor = minutos / 60 × tarifa_hora × factor`, con
 `tarifa_hora = salario_base_mensual / divisor_hora_ordinaria`.
+
+⚠️ **Discrepancia detectada en la planilla de la contadora (mayo 2026):** usa el
+festivo diurno actualizado (×1.80) pero los factores combinados viejos
+(FESTIVO EXTRA ×2.00, NOCTURNO DOMINICAL ×2.10, EXTRA NOCTURNO DOMINICAL ×2.50),
+que corresponden al recargo dominical del 75% anterior a la Ley 2466/2025. El
+modelo aditivo con el 80% vigente da 2.05 / 2.15 / 2.55. Confirmar con ella cuál
+debe prevalecer; el motor sigue los parámetros vigentes.
 
 ### 5.4 Política de redondeo
 
