@@ -28,7 +28,9 @@ NIT = "811001922"
 SALARIO_BASICO = Decimal("1750905")
 PERIODO_INICIO = date(2026, 7, 1)
 PERIODO_FIN = date(2026, 7, 15)
-ESTRATEGIA_EXTRAS = "diaria"
+# Extras por turno/jornada continua: en un turno que cruza medianoche, las horas de
+# sobre-jornada caen al final del turno (madrugada), con el recargo del día donde caen.
+ESTRATEGIA_EXTRAS = "jornada"
 
 # Factor fijo por concepto que usa la planilla (tabla de factores legada).
 FACTORES_OVERRIDE: dict[str, Decimal] = {

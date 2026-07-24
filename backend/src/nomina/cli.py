@@ -39,8 +39,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--desde", type=date.fromisoformat, required=True,
                         help="inicio del periodo (fija vigencias del periodo)")
     parser.add_argument("--turno", action="append", default=[], metavar="'AAAA-MM-DD HH:MM-HH:MM'")
-    parser.add_argument("--estrategia", choices=["presupuesto_quincenal", "semanal_legal", "diaria"],
-                        default=None, help="anula la estrategia del parámetro")
+    parser.add_argument(
+        "--estrategia",
+        choices=["presupuesto_quincenal", "semanal_legal", "diaria", "jornada"],
+        default=None, help="anula la estrategia del parámetro")
     parser.add_argument("--sin-auxilio", action="store_true")
     parser.add_argument("--tramos", action="store_true", help="mostrar el detalle de tramos")
     args = parser.parse_args(argv)
