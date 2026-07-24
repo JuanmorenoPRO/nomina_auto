@@ -114,6 +114,13 @@ table.grilla td input {
 table.grilla td.total { font-weight: 600; text-align: right; background: #f8fafc; }
 .nombre-empleado { font-weight: 600; white-space: nowrap; }
 .pista { color: #64748b; font-size: 12px; margin: 8px 0; }
+.campo.casilla, label.casilla {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.campo.casilla input, label.casilla input { min-width: 0; }
+.subtitulo { color: #475569; padding-top: 8px; }
 
 .tarjeta { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
 .insignia { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; }

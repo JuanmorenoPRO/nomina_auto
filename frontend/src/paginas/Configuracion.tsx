@@ -15,6 +15,9 @@ const NOMBRES_PARAMETROS: Record<string, string> = {
   tope_horas_extra_dia: "Tope de horas extra por día",
   auxilio_transporte_mensual: "Auxilio de transporte mensual",
   estrategia_clasificacion_extras: "Estrategia de clasificación de extras",
+  horas_jornada_diaria: "Jornada diaria (umbral estrategia 'diaria')",
+  aporte_salud_empleado: "% aporte salud del empleado",
+  aporte_pension_empleado: "% aporte pensión del empleado",
 };
 
 export function Configuracion() {

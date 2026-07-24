@@ -14,7 +14,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from nomina.aplicacion.errores import NoEncontradoError, ReglaDeNegocioError
-from nomina.dominio.entidades.concepto_liquidado import Liquidacion
+from nomina.dominio.entidades.concepto_liquidado import ConceptoManual, Liquidacion
 from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.parametro_legal import ConjuntoParametros
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
@@ -62,6 +62,14 @@ class RepositorioLiquidaciones(Protocol):
     def ultima_version(self, periodo_id: UUID, unidad_id: UUID) -> int: ...
 
 
+class RepositorioConceptosManuales(Protocol):
+    """Puerto: conceptos manuales (devengados/deducciones) por empleado y periodo."""
+
+    def de_empleado_en_periodo(
+        self, empleado_id: UUID, periodo_id: UUID
+    ) -> list[ConceptoManual]: ...
+
+
 @dataclass(frozen=True)
 class LiquidarQuincena:
     periodos: RepositorioPeriodos
@@ -71,6 +79,7 @@ class LiquidarQuincena:
     parametros: RepositorioParametros
     festivos: RepositorioFestivos
     liquidaciones: RepositorioLiquidaciones
+    conceptos_manuales: RepositorioConceptosManuales
 
     def ejecutar(self, periodo_id: UUID, unidad_id: UUID) -> LiquidacionQuincena:
         periodo = self.periodos.obtener(periodo_id)
@@ -97,9 +106,21 @@ class LiquidarQuincena:
                 empleado.id, periodo.fecha_inicio, periodo.fecha_fin
             )
             tramos = segmentar_turnos([r.turno for r in registrados], conjunto, calendario)
-            clasificados = clasificar_extras(tramos, conjunto, periodo.fecha_inicio)
+            clasificados = clasificar_extras(
+                tramos, conjunto, periodo.fecha_inicio, estrategia=unidad.config.estrategia_extras
+            )
+            # Conceptos fijos de la unidad (ej. cuota de manejo) + manuales del empleado.
+            manuales = unidad.config.conceptos_fijos + tuple(
+                self.conceptos_manuales.de_empleado_en_periodo(empleado.id, periodo_id)
+            )
             resultado = liquidar(
-                clasificados, empleado.salario_base, conjunto, periodo.fecha_inicio
+                clasificados,
+                empleado.salario_base,
+                conjunto,
+                periodo.fecha_inicio,
+                factores_override=unidad.config.factores_override,
+                conceptos_manuales=manuales,
+                descontar_seguridad_social=unidad.descuenta_seguridad_social,
             )
             por_empleado.append(LiquidacionEmpleado(empleado=empleado, liquidacion=resultado))
 

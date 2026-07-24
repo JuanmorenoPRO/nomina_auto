@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from uuid import UUID
+
+DEVENGADO = "devengado"
+DEDUCCION = "deduccion"
 
 
 @dataclass(frozen=True)
@@ -10,7 +14,8 @@ class ConceptoLiquidado:
 
     `componentes` desglosa el factor (ej. {'hora_base': 1, 'recargo_dominical_festivo':
     0.80, 'recargo_nocturno': 0.35}) para que el reporte sea auditable.
-    Los conceptos sin horas (ej. auxilio de transporte) llevan minutos=0 y factor=None.
+    Los conceptos sin horas (ej. auxilio de transporte, deducciones) llevan
+    minutos=0 y factor=None.
     """
 
     codigo: str
@@ -27,14 +32,56 @@ class ConceptoLiquidado:
 
 
 @dataclass(frozen=True)
+class ConceptoManual:
+    """Concepto cargado a mano por empleado/periodo: un devengado adicional
+    (ej. cuota de manejo de tarjeta) o una deducción (ej. préstamo).
+
+    `salarial` solo aplica a los devengados: indica si suma al IBC de aportes.
+    """
+
+    nombre: str
+    valor: Decimal
+    tipo: str = DEVENGADO  # DEVENGADO | DEDUCCION
+    salarial: bool = False
+
+
+@dataclass(frozen=True)
+class ConceptoManualRegistrado:
+    """Concepto manual persistido: identidad + empleado + periodo + el concepto."""
+
+    id: UUID
+    empleado_id: UUID
+    periodo_id: UUID
+    concepto: ConceptoManual
+
+
+@dataclass(frozen=True)
 class Liquidacion:
     """Resultado de liquidar la quincena de un empleado. Conceptos ADICIONALES
-    al salario base van desglosados; el total es la suma de valores ya redondeados."""
+    al salario base van desglosados; los totales suman valores ya redondeados.
+
+    `conceptos` son los devengados; `deducciones` los descuentos (salud, pensión,
+    otras). El neto a pagar = total devengado − total deducciones.
+    """
 
     salario_mensual: Decimal
     tarifa_hora: Decimal
     conceptos: tuple[ConceptoLiquidado, ...]
+    deducciones: tuple[ConceptoLiquidado, ...] = ()
+
+    @property
+    def total_devengado(self) -> Decimal:
+        return sum((c.valor for c in self.conceptos), Decimal(0))
+
+    @property
+    def total_deducciones(self) -> Decimal:
+        return sum((d.valor for d in self.deducciones), Decimal(0))
+
+    @property
+    def neto_a_pagar(self) -> Decimal:
+        return self.total_devengado - self.total_deducciones
 
     @property
     def total(self) -> Decimal:
-        return sum((c.valor for c in self.conceptos), Decimal(0))
+        """Alias histórico: total devengado (los conceptos ya redondeados)."""
+        return self.total_devengado

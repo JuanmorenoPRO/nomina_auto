@@ -8,18 +8,36 @@ from nomina.dominio.entidades.periodo_liquidacion import PeriodoLiquidacion
 from nomina.dominio.entidades.turno import TurnoRegistrado
 from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
 from nomina.infraestructura.api.schemas import (
+    ConceptoFijoConfig,
     ConceptoRespuesta,
     EmpleadoRespuesta,
     LiquidacionEmpleadoRespuesta,
     LiquidacionRespuesta,
     PeriodoRespuesta,
     TurnoRespuesta,
+    UnidadConfig,
     UnidadRespuesta,
 )
 
 
 def unidad_a_schema(u: UnidadResidencial) -> UnidadRespuesta:
-    return UnidadRespuesta(id=u.id, nombre=u.nombre, nit=u.nit, activa=u.activa)
+    return UnidadRespuesta(
+        id=u.id,
+        nombre=u.nombre,
+        nit=u.nit,
+        activa=u.activa,
+        descuenta_seguridad_social=u.descuenta_seguridad_social,
+        config=UnidadConfig(
+            estrategia_extras=u.config.estrategia_extras,
+            factores_override={k: str(v) for k, v in u.config.factores_override.items()},
+            conceptos_fijos=[
+                ConceptoFijoConfig(
+                    nombre=c.nombre, valor=int(c.valor), tipo=c.tipo, salarial=c.salarial
+                )
+                for c in u.config.conceptos_fijos
+            ],
+        ),
+    )
 
 
 def empleado_a_schema(e: Empleado) -> EmpleadoRespuesta:
@@ -53,6 +71,17 @@ def turno_a_schema(t: TurnoRegistrado) -> TurnoRespuesta:
 
 
 def liquidacion_a_schema(liq: LiquidacionQuincena) -> LiquidacionRespuesta:
+    def _concepto(c) -> ConceptoRespuesta:
+        return ConceptoRespuesta(
+            codigo=c.codigo,
+            nombre=c.nombre,
+            minutos=c.minutos,
+            horas=f"{c.horas:.2f}",
+            factor=str(c.factor) if c.factor is not None else None,
+            componentes={k: str(v) for k, v in c.componentes.items()},
+            valor=int(c.valor),
+        )
+
     empleados = [
         LiquidacionEmpleadoRespuesta(
             empleado_id=le.empleado.id,
@@ -60,18 +89,11 @@ def liquidacion_a_schema(liq: LiquidacionQuincena) -> LiquidacionRespuesta:
             documento=le.empleado.documento,
             salario_mensual=int(le.liquidacion.salario_mensual),
             tarifa_hora=str(le.liquidacion.tarifa_hora),
-            conceptos=[
-                ConceptoRespuesta(
-                    codigo=c.codigo,
-                    nombre=c.nombre,
-                    minutos=c.minutos,
-                    horas=f"{c.horas:.2f}",
-                    factor=str(c.factor) if c.factor is not None else None,
-                    componentes={k: str(v) for k, v in c.componentes.items()},
-                    valor=int(c.valor),
-                )
-                for c in le.liquidacion.conceptos
-            ],
+            conceptos=[_concepto(c) for c in le.liquidacion.conceptos],
+            deducciones=[_concepto(d) for d in le.liquidacion.deducciones],
+            total_devengado=int(le.liquidacion.total_devengado),
+            total_deducciones=int(le.liquidacion.total_deducciones),
+            neto_a_pagar=int(le.liquidacion.neto_a_pagar),
             total=int(le.liquidacion.total),
         )
         for le in liq.por_empleado

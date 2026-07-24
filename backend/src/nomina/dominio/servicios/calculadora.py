@@ -23,7 +23,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from nomina.dominio.entidades.concepto_liquidado import ConceptoLiquidado, Liquidacion
+from nomina.dominio.entidades.concepto_liquidado import (
+    DEDUCCION,
+    ConceptoLiquidado,
+    ConceptoManual,
+    Liquidacion,
+)
 from nomina.dominio.puertos.parametros import ProveedorParametros
 from nomina.dominio.valores.tiempo import MINUTOS_POR_HORA
 from nomina.dominio.valores.tramo import Franja, TipoDia, Tramo
@@ -40,6 +45,9 @@ NOMBRES_CONCEPTOS = {
     "extra_nocturna_festiva": "TIEMPO EXTRA NOCTURNO DOMINICAL/FESTIVO",
     "auxilio_transporte": "AUXILIO DE TRANSPORTE",
 }
+
+# Conceptos que NO forman parte del IBC de aportes de seguridad social.
+NO_SALARIALES = frozenset({"auxilio_transporte"})
 
 _UN_PESO = Decimal("1")
 
@@ -100,13 +108,23 @@ def liquidar(
     parametros: ProveedorParametros,
     fecha_periodo: date,
     incluir_auxilio_transporte: bool = True,
+    factores_override: dict[str, Decimal] | None = None,
+    conceptos_manuales: tuple[ConceptoManual, ...] = (),
+    descontar_seguridad_social: bool = False,
 ) -> Liquidacion:
     """Liquida la quincena de un empleado a partir de sus tramos ya clasificados.
 
     `fecha_periodo` (inicio del periodo) fija la vigencia del divisor, las horas
     de la quincena y el auxilio de transporte; los recargos de cada tramo usan
     la vigencia de la fecha del tramo.
+
+    `factores_override` reemplaza el factor aditivo de un concepto por un factor
+    fijo de la unidad (planillas con tabla de factores legada). `conceptos_manuales`
+    agrega devengados/deducciones cargados a mano. Si `descontar_seguridad_social`,
+    se generan las deducciones de salud y pensión sobre el IBC (devengados
+    salariales, sin auxilio de transporte).
     """
+    override = factores_override or {}
     tarifa_hora = salario_mensual / parametros.divisor_hora_ordinaria(fecha_periodo)
 
     # Agrupar minutos por (concepto, factor): si una vigencia cambia dentro del
@@ -139,18 +157,29 @@ def liquidar(
     for (codigo, factor), (minutos, componentes) in sorted(
         grupos.items(), key=lambda kv: (orden.index(kv[0][0]), kv[0][1])
     ):
-        valor = Decimal(minutos) / MINUTOS_POR_HORA * tarifa_hora * factor
+        if codigo in override:
+            factor_efectivo = override[codigo]
+            componentes = {"factor_unidad": factor_efectivo}
+        else:
+            factor_efectivo = factor
+        valor = Decimal(minutos) / MINUTOS_POR_HORA * tarifa_hora * factor_efectivo
         conceptos.append(
             ConceptoLiquidado(
                 codigo=codigo,
                 nombre=NOMBRES_CONCEPTOS[codigo],
                 minutos=minutos,
                 tarifa_hora=tarifa_hora,
-                factor=factor,
+                factor=factor_efectivo,
                 componentes=componentes,
                 valor=_redondear_pesos(valor),
             )
         )
+
+    # IBC de aportes: devengados salariales por horas (todo menos auxilio y no salariales).
+    ibc = sum(
+        (c.valor for c in conceptos if c.codigo not in NO_SALARIALES),
+        Decimal(0),
+    )
 
     if incluir_auxilio_transporte:
         auxilio = parametros.auxilio_transporte_mensual(fecha_periodo) / 2
@@ -163,8 +192,41 @@ def liquidar(
             )
         )
 
+    deducciones: list[ConceptoLiquidado] = []
+    for manual in conceptos_manuales:
+        valor = _redondear_pesos(manual.valor)
+        if manual.tipo == DEDUCCION:
+            deducciones.append(
+                ConceptoLiquidado(codigo="otra_deduccion", nombre=manual.nombre, minutos=0, valor=valor)
+            )
+        else:
+            conceptos.append(
+                ConceptoLiquidado(codigo="otro_devengado", nombre=manual.nombre, minutos=0, valor=valor)
+            )
+            if manual.salarial:
+                ibc += valor
+
+    if descontar_seguridad_social:
+        tasa_salud = parametros.aporte_salud_empleado(fecha_periodo)
+        tasa_pension = parametros.aporte_pension_empleado(fecha_periodo)
+        deducciones.insert(
+            0,
+            ConceptoLiquidado(
+                codigo="aporte_pension", nombre="PENSIÓN", minutos=0,
+                factor=tasa_pension, valor=_redondear_pesos(ibc * tasa_pension),
+            ),
+        )
+        deducciones.insert(
+            0,
+            ConceptoLiquidado(
+                codigo="aporte_salud", nombre="SALUD", minutos=0,
+                factor=tasa_salud, valor=_redondear_pesos(ibc * tasa_salud),
+            ),
+        )
+
     return Liquidacion(
         salario_mensual=salario_mensual,
         tarifa_hora=tarifa_hora,
         conceptos=tuple(conceptos),
+        deducciones=tuple(deducciones),
     )

@@ -18,15 +18,23 @@ from nomina.aplicacion.casos_uso.liquidar_quincena import (
     LiquidacionEmpleado,
     LiquidacionQuincena,
 )
-from nomina.dominio.entidades.concepto_liquidado import ConceptoLiquidado, Liquidacion
+from nomina.dominio.entidades.concepto_liquidado import (
+    DEDUCCION,
+    DEVENGADO,
+    ConceptoLiquidado,
+    ConceptoManual,
+    ConceptoManualRegistrado,
+    Liquidacion,
+)
 from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.parametro_legal import ParametroLegal
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
 from nomina.dominio.entidades.turno import Turno, TurnoRegistrado
-from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
+from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
 from nomina.dominio.valores.vigencia import Vigencia
 from nomina.infraestructura.persistencia.modelos import (
     ConceptoLiquidadoModel,
+    ConceptoManualModel,
     EmpleadoModel,
     FestivoModel,
     LiquidacionEmpleadoModel,
@@ -38,6 +46,40 @@ from nomina.infraestructura.persistencia.modelos import (
 )
 
 
+def _concepto_fijo_a_json(c: ConceptoManual) -> dict:
+    return {"nombre": c.nombre, "valor": str(c.valor), "tipo": c.tipo, "salarial": c.salarial}
+
+
+def _concepto_fijo_de_json(d: dict) -> ConceptoManual:
+    return ConceptoManual(
+        nombre=d["nombre"],
+        valor=Decimal(str(d["valor"])),
+        tipo=d.get("tipo", "devengado"),
+        salarial=bool(d.get("salarial", False)),
+    )
+
+
+def _config_a_json(config: ConfiguracionUnidad) -> dict:
+    return {
+        "estrategia_extras": config.estrategia_extras,
+        "factores_override": {k: str(v) for k, v in config.factores_override.items()},
+        "conceptos_fijos": [_concepto_fijo_a_json(c) for c in config.conceptos_fijos],
+    }
+
+
+def _config_de_json(datos: dict | None) -> ConfiguracionUnidad:
+    datos = datos or {}
+    return ConfiguracionUnidad(
+        estrategia_extras=datos.get("estrategia_extras"),
+        factores_override={
+            k: Decimal(v) for k, v in (datos.get("factores_override") or {}).items()
+        },
+        conceptos_fijos=tuple(
+            _concepto_fijo_de_json(c) for c in (datos.get("conceptos_fijos") or [])
+        ),
+    )
+
+
 @dataclass
 class RepositorioUnidadesSQL:
     session: Session
@@ -45,7 +87,12 @@ class RepositorioUnidadesSQL:
     def guardar(self, unidad: UnidadResidencial) -> None:
         self.session.merge(
             UnidadResidencialModel(
-                id=unidad.id, nombre=unidad.nombre, nit=unidad.nit, activa=unidad.activa
+                id=unidad.id,
+                nombre=unidad.nombre,
+                nit=unidad.nit,
+                activa=unidad.activa,
+                descuenta_seguridad_social=unidad.descuenta_seguridad_social,
+                config=_config_a_json(unidad.config),
             )
         )
         self.session.flush()
@@ -62,7 +109,14 @@ class RepositorioUnidadesSQL:
 
     @staticmethod
     def _a_dominio(m: UnidadResidencialModel) -> UnidadResidencial:
-        return UnidadResidencial(id=m.id, nombre=m.nombre, nit=m.nit, activa=m.activa)
+        return UnidadResidencial(
+            id=m.id,
+            nombre=m.nombre,
+            nit=m.nit,
+            activa=m.activa,
+            descuenta_seguridad_social=m.descuenta_seguridad_social,
+            config=_config_de_json(m.config),
+        )
 
 
 @dataclass
@@ -278,6 +332,60 @@ class RepositorioFestivosSQL:
 
 
 @dataclass
+class RepositorioConceptosManualesSQL:
+    session: Session
+
+    def guardar(self, registrado: ConceptoManualRegistrado) -> None:
+        c = registrado.concepto
+        self.session.merge(
+            ConceptoManualModel(
+                id=registrado.id,
+                empleado_id=registrado.empleado_id,
+                periodo_id=registrado.periodo_id,
+                tipo=c.tipo,
+                nombre=c.nombre,
+                valor=int(c.valor),
+                salarial=c.salarial,
+            )
+        )
+        self.session.flush()
+
+    def eliminar(self, id: UUID) -> bool:
+        m = self.session.get(ConceptoManualModel, id)
+        if m is None:
+            return False
+        self.session.delete(m)
+        self.session.flush()
+        return True
+
+    def listar(
+        self, empleado_id: UUID | None = None, periodo_id: UUID | None = None
+    ) -> list[ConceptoManualRegistrado]:
+        consulta = select(ConceptoManualModel)
+        if empleado_id is not None:
+            consulta = consulta.where(ConceptoManualModel.empleado_id == empleado_id)
+        if periodo_id is not None:
+            consulta = consulta.where(ConceptoManualModel.periodo_id == periodo_id)
+        return [self._a_dominio(m) for m in self.session.scalars(consulta)]
+
+    def de_empleado_en_periodo(
+        self, empleado_id: UUID, periodo_id: UUID
+    ) -> list[ConceptoManual]:
+        return [r.concepto for r in self.listar(empleado_id=empleado_id, periodo_id=periodo_id)]
+
+    @staticmethod
+    def _a_dominio(m: ConceptoManualModel) -> ConceptoManualRegistrado:
+        return ConceptoManualRegistrado(
+            id=m.id,
+            empleado_id=m.empleado_id,
+            periodo_id=m.periodo_id,
+            concepto=ConceptoManual(
+                nombre=m.nombre, valor=Decimal(m.valor), tipo=m.tipo, salarial=m.salarial
+            ),
+        )
+
+
+@dataclass
 class RepositorioLiquidacionesSQL:
     session: Session
 
@@ -297,10 +405,13 @@ class RepositorioLiquidacionesSQL:
                 salario_mensual=int(le.liquidacion.salario_mensual),
                 tarifa_hora=str(le.liquidacion.tarifa_hora),
             )
-            for orden, c in enumerate(le.liquidacion.conceptos):
+            lineas = [(DEVENGADO, c) for c in le.liquidacion.conceptos]
+            lineas += [(DEDUCCION, d) for d in le.liquidacion.deducciones]
+            for orden, (tipo, c) in enumerate(lineas):
                 emp_modelo.conceptos.append(
                     ConceptoLiquidadoModel(
                         orden=orden,
+                        tipo=tipo,
                         codigo=c.codigo,
                         nombre=c.nombre,
                         minutos=c.minutos,
@@ -341,8 +452,8 @@ class RepositorioLiquidacionesSQL:
         for le in m.empleados:
             empleado = empleados_repo.obtener(le.empleado_id)
             assert empleado is not None
-            conceptos = tuple(
-                ConceptoLiquidado(
+            def _a_concepto(c: ConceptoLiquidadoModel) -> ConceptoLiquidado:
+                return ConceptoLiquidado(
                     codigo=c.codigo,
                     nombre=c.nombre,
                     minutos=c.minutos,
@@ -351,8 +462,9 @@ class RepositorioLiquidacionesSQL:
                     componentes={k: Decimal(v) for k, v in c.componentes.items()},
                     valor=Decimal(c.valor),
                 )
-                for c in le.conceptos
-            )
+
+            conceptos = tuple(_a_concepto(c) for c in le.conceptos if c.tipo != DEDUCCION)
+            deducciones = tuple(_a_concepto(c) for c in le.conceptos if c.tipo == DEDUCCION)
             por_empleado.append(
                 LiquidacionEmpleado(
                     empleado=empleado,
@@ -360,6 +472,7 @@ class RepositorioLiquidacionesSQL:
                         salario_mensual=Decimal(le.salario_mensual),
                         tarifa_hora=Decimal(le.tarifa_hora),
                         conceptos=conceptos,
+                        deducciones=deducciones,
                     ),
                 )
             )

@@ -40,6 +40,10 @@ class UnidadResidencialModel(Base):
     nombre: Mapped[str] = mapped_column(String(200), unique=True)
     nit: Mapped[str] = mapped_column(String(30), default="")
     activa: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Si descuenta salud/pensión del empleado en la liquidación (opción por unidad).
+    descuenta_seguridad_social: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Overrides de cálculo (estrategia_extras, factores_override) como JSON.
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class EmpleadoModel(Base):
@@ -177,6 +181,7 @@ class ConceptoLiquidadoModel(Base):
         ForeignKey("liquidacion_empleado.id"), index=True
     )
     orden: Mapped[int] = mapped_column(Integer, default=0)
+    tipo: Mapped[str] = mapped_column(String(12), default="devengado")  # devengado | deduccion
     codigo: Mapped[str] = mapped_column(String(50))
     nombre: Mapped[str] = mapped_column(String(100))
     minutos: Mapped[int] = mapped_column(Integer)
@@ -188,3 +193,18 @@ class ConceptoLiquidadoModel(Base):
     liquidacion_empleado: Mapped[LiquidacionEmpleadoModel] = relationship(
         back_populates="conceptos"
     )
+
+
+class ConceptoManualModel(Base):
+    """Devengado o deducción cargado a mano por empleado y periodo
+    (ej. cuota de manejo, préstamo). Se aplica al liquidar."""
+
+    __tablename__ = "concepto_manual"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    empleado_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("empleado.id"), index=True)
+    periodo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("periodo_liquidacion.id"), index=True)
+    tipo: Mapped[str] = mapped_column(String(12), default="devengado")  # devengado | deduccion
+    nombre: Mapped[str] = mapped_column(String(100))
+    valor: Mapped[int] = mapped_column(BigInteger)  # pesos enteros
+    salarial: Mapped[bool] = mapped_column(Boolean, default=False)  # suma al IBC (solo devengados)

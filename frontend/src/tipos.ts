@@ -19,11 +19,36 @@ export interface RegistroAuditoria {
   timestamp: string;
 }
 
+export interface ConceptoFijo {
+  nombre: string;
+  valor: number;
+  tipo: "devengado" | "deduccion";
+  salarial: boolean;
+}
+
+export interface ConfigUnidad {
+  estrategia_extras: string | null;
+  factores_override: Record<string, string>;
+  conceptos_fijos: ConceptoFijo[];
+}
+
 export interface Unidad {
   id: string;
   nombre: string;
   nit: string;
   activa: boolean;
+  descuenta_seguridad_social: boolean;
+  config: ConfigUnidad;
+}
+
+export interface ConceptoManual {
+  id: string;
+  empleado_id: string;
+  periodo_id: string;
+  tipo: "devengado" | "deduccion";
+  nombre: string;
+  valor: number;
+  salarial: boolean;
 }
 
 export interface Empleado {
@@ -84,6 +109,10 @@ export interface LiquidacionEmpleado {
   salario_mensual: number;
   tarifa_hora: string;
   conceptos: Concepto[];
+  deducciones: Concepto[];
+  total_devengado: number;
+  total_deducciones: number;
+  neto_a_pagar: number;
   total: number;
 }
 

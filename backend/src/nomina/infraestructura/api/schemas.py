@@ -12,9 +12,34 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 
+class ConceptoFijoConfig(BaseModel):
+    nombre: str = Field(min_length=1, max_length=100)
+    valor: int = Field(gt=0, description="pesos enteros")
+    tipo: str = Field(default="devengado", pattern="^(devengado|deduccion)$")
+    salarial: bool = False
+
+
+class UnidadConfig(BaseModel):
+    estrategia_extras: str | None = None
+    # factor fijo por código de concepto (texto decimal exacto, ej. {"festivo_nocturno": "2.1"})
+    factores_override: dict[str, str] = Field(default_factory=dict)
+    # devengados/deducciones fijos que se aplican a todos los empleados de la unidad
+    conceptos_fijos: list[ConceptoFijoConfig] = Field(default_factory=list)
+
+
 class UnidadCrear(BaseModel):
     nombre: str = Field(min_length=1, max_length=200)
     nit: str = Field(default="", max_length=30)
+    descuenta_seguridad_social: bool = False
+    config: UnidadConfig = Field(default_factory=UnidadConfig)
+
+
+class UnidadActualizar(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1, max_length=200)
+    nit: str | None = Field(default=None, max_length=30)
+    activa: bool | None = None
+    descuenta_seguridad_social: bool | None = None
+    config: UnidadConfig | None = None
 
 
 class UnidadRespuesta(BaseModel):
@@ -22,6 +47,8 @@ class UnidadRespuesta(BaseModel):
     nombre: str
     nit: str
     activa: bool
+    descuenta_seguridad_social: bool
+    config: UnidadConfig
 
 
 class EmpleadoCrear(BaseModel):
@@ -49,6 +76,25 @@ class EmpleadoRespuesta(BaseModel):
     cargo: str
     salario_base: int
     activo: bool
+
+
+class ConceptoManualCrear(BaseModel):
+    empleado_id: UUID
+    periodo_id: UUID
+    tipo: str = Field(default="devengado", pattern="^(devengado|deduccion)$")
+    nombre: str = Field(min_length=1, max_length=100)
+    valor: int = Field(gt=0, description="pesos enteros")
+    salarial: bool = False
+
+
+class ConceptoManualRespuesta(BaseModel):
+    id: UUID
+    empleado_id: UUID
+    periodo_id: UUID
+    tipo: str
+    nombre: str
+    valor: int
+    salarial: bool
 
 
 class PeriodoCrear(BaseModel):
@@ -135,7 +181,11 @@ class LiquidacionEmpleadoRespuesta(BaseModel):
     salario_mensual: int
     tarifa_hora: str
     conceptos: list[ConceptoRespuesta]
-    total: int
+    deducciones: list[ConceptoRespuesta]
+    total_devengado: int
+    total_deducciones: int
+    neto_a_pagar: int
+    total: int  # alias histórico = total_devengado
 
 
 class LiquidacionRespuesta(BaseModel):

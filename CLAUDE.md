@@ -123,6 +123,12 @@ por eso el dev server usa 5174 y el backend 8001.
       auditoría append-only (triggers de BD bloquean UPDATE/DELETE), cierre definitivo
       de quincenas, rate limiting en login y cabeceras de seguridad.
 
+- [x] **Fase 5:** unidades con **descuento de seguridad social** (opción por unidad:
+      salud 4% + pensión 4% sobre IBC, tasas parametrizadas), deducciones y `VALOR A PAGAR`
+      en liquidación/Excel, conceptos manuales (devengados/deducciones por empleado+periodo),
+      estrategia de extras `diaria` (umbral 8 h/día) y factores por unidad (`config`).
+      Unidad de referencia EDIFICIO PUEBLA P.H en `nomina/puebla.py` + golden test.
+
 **Todas las fases del plan original están completas.** Pendientes de negocio (ver
 memoria/docs): confirmar con la contadora los factores combinados y su regla real de
 clasificación de extras, y verificar el auxilio de transporte 2026 contra el decreto.

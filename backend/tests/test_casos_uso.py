@@ -14,6 +14,7 @@ from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
 from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
 from nomina.infraestructura.persistencia.repositorios import (
+    RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
     RepositorioLiquidacionesSQL,
@@ -62,6 +63,7 @@ def _liquidar(session) -> LiquidarQuincena:
         parametros=RepositorioParametrosSQL(session),
         festivos=RepositorioFestivosSQL(session),
         liquidaciones=RepositorioLiquidacionesSQL(session),
+        conceptos_manuales=RepositorioConceptosManualesSQL(session),
     )
 
 
@@ -135,7 +137,7 @@ def test_liquidacion_guarda_snapshot_de_parametros(session, contexto):
     modelo = session.get(LiquidacionModel, liquidacion.id)
     codigos = {p["codigo"] for p in modelo.parametros_snapshot}
     assert "recargo_dominical_festivo" in codigos
-    assert len(modelo.parametros_snapshot) == 20
+    assert len(modelo.parametros_snapshot) == 23
 
 
 def test_actualizar_parametro_cierra_vigencia_anterior(session):

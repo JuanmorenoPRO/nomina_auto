@@ -6,7 +6,7 @@ También se ejecuta al arrancar la API.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from nomina.infraestructura.persistencia.modelos import ParametroLegalModel
@@ -15,14 +15,20 @@ from nomina.semilla import PARAMETROS_SEMILLA
 
 
 def sembrar_parametros(session: Session) -> int:
-    """Inserta la semilla si no hay parámetros. Devuelve cuántos insertó."""
-    existentes = session.scalar(select(func.count()).select_from(ParametroLegalModel))
-    if existentes:
-        return 0
+    """Inserta los parámetros de la semilla cuyo código aún no existe en la BD.
+
+    Idempotente por código: en una BD nueva inserta todo; en una ya sembrada
+    agrega solo los códigos nuevos (ej. aportes de seguridad social) sin duplicar.
+    """
+    existentes = set(session.scalars(select(ParametroLegalModel.codigo)))
     repo = RepositorioParametrosSQL(session)
+    insertados = 0
     for parametro in PARAMETROS_SEMILLA:
+        if parametro.codigo in existentes:
+            continue
         repo.agregar(parametro)
-    return len(PARAMETROS_SEMILLA)
+        insertados += 1
+    return insertados
 
 
 def main() -> None:

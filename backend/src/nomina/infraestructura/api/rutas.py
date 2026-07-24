@@ -23,14 +23,19 @@ from nomina.aplicacion.casos_uso.cerrar_quincena import CerrarQuincena
 from nomina.aplicacion.casos_uso.exportar_liquidacion import ExportarLiquidacion
 from nomina.aplicacion.casos_uso.liquidar_quincena import LiquidarQuincena
 from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
+from nomina.dominio.entidades.concepto_liquidado import (
+    ConceptoManual,
+    ConceptoManualRegistrado,
+)
 from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
-from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
+from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
 from nomina.dominio.servicios.calendario_festivos import festivos_por_ley
 from nomina.infraestructura.api import schemas, traductores
 from nomina.infraestructura.excel.exportador import exportar_liquidacion_excel
 from nomina.infraestructura.persistencia.base import sesion
 from nomina.infraestructura.persistencia.repositorios import (
+    RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
     RepositorioLiquidacionesSQL,
@@ -59,18 +64,67 @@ def salud() -> dict[str, str]:
 # --- Unidades residenciales ---
 
 
+def _config_de_schema(cfg: schemas.UnidadConfig) -> ConfiguracionUnidad:
+    return ConfiguracionUnidad(
+        estrategia_extras=cfg.estrategia_extras,
+        factores_override={k: Decimal(v) for k, v in cfg.factores_override.items()},
+        conceptos_fijos=tuple(
+            ConceptoManual(
+                nombre=c.nombre, valor=Decimal(c.valor), tipo=c.tipo, salarial=c.salarial
+            )
+            for c in cfg.conceptos_fijos
+        ),
+    )
+
+
 @router.post("/unidades", response_model=schemas.UnidadRespuesta, status_code=201)
 def crear_unidad(datos: schemas.UnidadCrear, usuario: UsuarioContadora, session: Sesion):
-    unidad = UnidadResidencial(id=uuid4(), nombre=datos.nombre, nit=datos.nit)
+    unidad = UnidadResidencial(
+        id=uuid4(),
+        nombre=datos.nombre,
+        nit=datos.nit,
+        descuenta_seguridad_social=datos.descuenta_seguridad_social,
+        config=_config_de_schema(datos.config),
+    )
     RepositorioUnidadesSQL(session).guardar(unidad)
     auditar(session, usuario.email, "crear", "unidad", str(unidad.id),
-            despues={"nombre": unidad.nombre, "nit": unidad.nit})
+            despues={"nombre": unidad.nombre, "nit": unidad.nit,
+                     "descuenta_seguridad_social": unidad.descuenta_seguridad_social})
     return traductores.unidad_a_schema(unidad)
 
 
 @router.get("/unidades", response_model=list[schemas.UnidadRespuesta])
 def listar_unidades(usuario: UsuarioOperador, session: Sesion):
     return [traductores.unidad_a_schema(u) for u in RepositorioUnidadesSQL(session).listar()]
+
+
+@router.patch("/unidades/{unidad_id}", response_model=schemas.UnidadRespuesta)
+def actualizar_unidad(
+    unidad_id: UUID, datos: schemas.UnidadActualizar, usuario: UsuarioContadora, session: Sesion
+):
+    repo = RepositorioUnidadesSQL(session)
+    unidad = repo.obtener(unidad_id)
+    if unidad is None:
+        raise HTTPException(404, "No existe la unidad residencial")
+    from dataclasses import replace
+
+    cambios: dict = {}
+    if datos.nombre is not None:
+        cambios["nombre"] = datos.nombre
+    if datos.nit is not None:
+        cambios["nit"] = datos.nit
+    if datos.activa is not None:
+        cambios["activa"] = datos.activa
+    if datos.descuenta_seguridad_social is not None:
+        cambios["descuenta_seguridad_social"] = datos.descuenta_seguridad_social
+    if datos.config is not None:
+        cambios["config"] = _config_de_schema(datos.config)
+    actualizada = replace(unidad, **cambios)
+    repo.guardar(actualizada)
+    auditar(session, usuario.email, "actualizar", "unidad", str(unidad_id),
+            despues={"descuenta_seguridad_social": actualizada.descuenta_seguridad_social,
+                     "activa": actualizada.activa})
+    return traductores.unidad_a_schema(actualizada)
 
 
 # --- Empleados ---
@@ -100,6 +154,59 @@ def crear_empleado(datos: schemas.EmpleadoCrear, usuario: UsuarioContadora, sess
 def listar_empleados(usuario: UsuarioOperador, session: Sesion, unidad_id: UUID | None = None):
     empleados = RepositorioEmpleadosSQL(session).listar(unidad_id=unidad_id)
     return [traductores.empleado_a_schema(e) for e in empleados]
+
+
+# --- Conceptos manuales (devengados/deducciones por empleado y periodo) ---
+
+
+@router.get("/conceptos-manuales", response_model=list[schemas.ConceptoManualRespuesta])
+def listar_conceptos_manuales(
+    usuario: UsuarioOperador, session: Sesion,
+    empleado_id: UUID | None = None, periodo_id: UUID | None = None,
+):
+    registros = RepositorioConceptosManualesSQL(session).listar(
+        empleado_id=empleado_id, periodo_id=periodo_id
+    )
+    return [
+        schemas.ConceptoManualRespuesta(
+            id=r.id, empleado_id=r.empleado_id, periodo_id=r.periodo_id,
+            tipo=r.concepto.tipo, nombre=r.concepto.nombre,
+            valor=int(r.concepto.valor), salarial=r.concepto.salarial,
+        )
+        for r in registros
+    ]
+
+
+@router.post("/conceptos-manuales", response_model=schemas.ConceptoManualRespuesta, status_code=201)
+def crear_concepto_manual(
+    datos: schemas.ConceptoManualCrear, usuario: UsuarioContadora, session: Sesion
+):
+    if RepositorioEmpleadosSQL(session).obtener(datos.empleado_id) is None:
+        raise HTTPException(404, "No existe el empleado")
+    if RepositorioPeriodosSQL(session).obtener(datos.periodo_id) is None:
+        raise HTTPException(404, "No existe el periodo")
+    registrado = ConceptoManualRegistrado(
+        id=uuid4(), empleado_id=datos.empleado_id, periodo_id=datos.periodo_id,
+        concepto=ConceptoManual(
+            nombre=datos.nombre, valor=Decimal(datos.valor),
+            tipo=datos.tipo, salarial=datos.salarial,
+        ),
+    )
+    RepositorioConceptosManualesSQL(session).guardar(registrado)
+    auditar(session, usuario.email, "crear", "concepto_manual", str(registrado.id),
+            despues={"empleado_id": str(datos.empleado_id), "periodo_id": str(datos.periodo_id),
+                     "tipo": datos.tipo, "nombre": datos.nombre, "valor": datos.valor})
+    return schemas.ConceptoManualRespuesta(
+        id=registrado.id, empleado_id=datos.empleado_id, periodo_id=datos.periodo_id,
+        tipo=datos.tipo, nombre=datos.nombre, valor=datos.valor, salarial=datos.salarial,
+    )
+
+
+@router.delete("/conceptos-manuales/{concepto_id}", status_code=204)
+def eliminar_concepto_manual(concepto_id: UUID, usuario: UsuarioContadora, session: Sesion):
+    if not RepositorioConceptosManualesSQL(session).eliminar(concepto_id):
+        raise HTTPException(404, "No existe el concepto manual")
+    auditar(session, usuario.email, "eliminar", "concepto_manual", str(concepto_id))
 
 
 # --- Periodos de liquidación ---
@@ -282,6 +389,7 @@ def _caso_liquidar(session: Session) -> LiquidarQuincena:
         parametros=RepositorioParametrosSQL(session),
         festivos=RepositorioFestivosSQL(session),
         liquidaciones=RepositorioLiquidacionesSQL(session),
+        conceptos_manuales=RepositorioConceptosManualesSQL(session),
     )
 
 

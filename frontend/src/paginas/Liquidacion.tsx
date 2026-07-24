@@ -159,13 +159,36 @@ function DetalleLiquidacion({ liquidacion }: { liquidacion: Liquidacion }) {
               ))}
               <tr>
                 <td colSpan={3}><b>TOTAL DEVENGADO</b></td>
-                <td className="numero"><b>$ {pesos.format(emp.total)}</b></td>
+                <td className="numero"><b>$ {pesos.format(emp.total_devengado)}</b></td>
+              </tr>
+              {emp.deducciones.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={4} className="subtitulo"><b>DEDUCCIONES</b></td>
+                  </tr>
+                  {emp.deducciones.map((d, i) => (
+                    <tr key={`d${i}`}>
+                      <td>{d.nombre}</td>
+                      <td className="numero"></td>
+                      <td className="numero">{d.factor ?? ""}</td>
+                      <td className="numero">− $ {pesos.format(d.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan={3}><b>TOTAL DEDUCCIONES</b></td>
+                    <td className="numero"><b>− $ {pesos.format(emp.total_deducciones)}</b></td>
+                  </tr>
+                </>
+              )}
+              <tr>
+                <td colSpan={3}><b>VALOR A PAGAR</b></td>
+                <td className="numero"><b>$ {pesos.format(emp.neto_a_pagar)}</b></td>
               </tr>
             </tbody>
           </table>
         </div>
       ))}
-      <h3>Total unidad: $ {pesos.format(liquidacion.total)}</h3>
+      <h3>Total devengado unidad: $ {pesos.format(liquidacion.total)}</h3>
     </div>
   );
 }

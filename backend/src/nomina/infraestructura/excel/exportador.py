@@ -71,9 +71,31 @@ def _hoja_empleado(hoja: Worksheet, liq: LiquidacionQuincena, le: LiquidacionEmp
 
     fila += 2
     hoja.cell(row=fila, column=1, value="TOTAL DEVENGADO").font = _NEGRITA
-    celda_total = hoja.cell(row=fila, column=4, value=int(le.liquidacion.total))
+    celda_total = hoja.cell(row=fila, column=4, value=int(le.liquidacion.total_devengado))
     celda_total.font = _NEGRITA
     celda_total.number_format = _PESOS
+
+    # Bloque de deducciones (si la unidad descuenta seguridad social o hay otras).
+    if le.liquidacion.deducciones:
+        fila += 2
+        hoja.cell(row=fila, column=1, value="DEDUCCIONES").font = _NEGRITA
+        for deduccion in le.liquidacion.deducciones:
+            fila += 1
+            hoja.cell(row=fila, column=1, value=deduccion.nombre)
+            if deduccion.factor is not None:
+                hoja.cell(row=fila, column=3, value=float(deduccion.factor)).number_format = "0.00"
+            hoja.cell(row=fila, column=4, value=int(deduccion.valor)).number_format = _PESOS
+        fila += 1
+        hoja.cell(row=fila, column=1, value="TOTAL DEDUCCIONES").font = _NEGRITA
+        celda_ded = hoja.cell(row=fila, column=4, value=int(le.liquidacion.total_deducciones))
+        celda_ded.font = _NEGRITA
+        celda_ded.number_format = _PESOS
+
+    fila += 2
+    hoja.cell(row=fila, column=1, value="VALOR A PAGAR").font = _TITULO
+    celda_neto = hoja.cell(row=fila, column=4, value=int(le.liquidacion.neto_a_pagar))
+    celda_neto.font = _TITULO
+    celda_neto.number_format = _PESOS
 
     hoja.column_dimensions["A"].width = 42
     for col in "BCDE":
@@ -82,7 +104,8 @@ def _hoja_empleado(hoja: Worksheet, liq: LiquidacionQuincena, le: LiquidacionEmp
 
 def _hoja_resumen(hoja: Worksheet, liq: LiquidacionQuincena) -> None:
     _encabezado(hoja, liq)
-    encabezados = ["EMPLEADO", "DOCUMENTO", "CARGO", "SALARIO MENSUAL", "TOTAL DEVENGADO"]
+    encabezados = ["EMPLEADO", "DOCUMENTO", "CARGO", "SALARIO MENSUAL",
+                   "TOTAL DEVENGADO", "TOTAL DEDUCCIONES", "VALOR A PAGAR"]
     fila = 5
     for col, texto in enumerate(encabezados, start=1):
         celda = hoja.cell(row=fila, column=col, value=texto)
@@ -95,16 +118,21 @@ def _hoja_resumen(hoja: Worksheet, liq: LiquidacionQuincena) -> None:
         hoja.cell(row=fila, column=2, value=le.empleado.documento)
         hoja.cell(row=fila, column=3, value=le.empleado.cargo)
         hoja.cell(row=fila, column=4, value=int(le.liquidacion.salario_mensual)).number_format = _PESOS
-        hoja.cell(row=fila, column=5, value=int(le.liquidacion.total)).number_format = _PESOS
+        hoja.cell(row=fila, column=5, value=int(le.liquidacion.total_devengado)).number_format = _PESOS
+        hoja.cell(row=fila, column=6, value=int(le.liquidacion.total_deducciones)).number_format = _PESOS
+        hoja.cell(row=fila, column=7, value=int(le.liquidacion.neto_a_pagar)).number_format = _PESOS
 
     fila += 2
     hoja.cell(row=fila, column=1, value="TOTAL UNIDAD").font = _NEGRITA
-    celda = hoja.cell(row=fila, column=5, value=int(liq.total))
+    total_neto = sum((le.liquidacion.neto_a_pagar for le in liq.por_empleado), start=0)
+    hoja.cell(row=fila, column=5, value=int(liq.total)).number_format = _PESOS
+    celda = hoja.cell(row=fila, column=7, value=int(total_neto))
     celda.font = _NEGRITA
     celda.number_format = _PESOS
+    hoja.cell(row=fila, column=5).font = _NEGRITA
 
     hoja.column_dimensions["A"].width = 34
-    for col in range(2, 6):
+    for col in range(2, 8):
         hoja.column_dimensions[get_column_letter(col)].width = 18
     hoja["A1"].alignment = Alignment(horizontal="left")
 

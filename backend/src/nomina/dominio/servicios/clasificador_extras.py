@@ -8,6 +8,9 @@ La estrategia es un parámetro con vigencias (`estrategia_clasificacion_extras`)
 - `semanal_legal`: acumulado por semana calendario (lunes a domingo) contra la
   `jornada_maxima_semanal` vigente en la fecha de cada tramo (44 h → 42 h el
   15-jul-2026). Solo cuenta lo trabajado dentro del periodo liquidado.
+- `diaria`: umbral por día calendario — lo que exceda `horas_jornada_diaria`
+  (hoy 8 h) trabajadas en un mismo día es extra. Es la regla de algunas planillas
+  (ej. Puebla): un día de 12 h paga 8 h ordinarias/recargo y 4 h extra.
 
 Si el umbral cae dentro de un tramo, el tramo se parte en dos; la clasificación
 conserva franja y tipo de día (una extra nocturna dominical sigue siéndolo).
@@ -23,6 +26,7 @@ from nomina.dominio.valores.tramo import Tramo
 
 PRESUPUESTO_QUINCENAL = "presupuesto_quincenal"
 SEMANAL_LEGAL = "semanal_legal"
+DIARIA = "diaria"
 
 
 def clasificar_extras(
@@ -42,6 +46,8 @@ def clasificar_extras(
         return _por_presupuesto_quincenal(ordenados, parametros, fecha_periodo)
     if estrategia == SEMANAL_LEGAL:
         return _por_semana_legal(ordenados, parametros)
+    if estrategia == DIARIA:
+        return _por_jornada_diaria(ordenados, parametros)
     raise ValueError(f"Estrategia de clasificación desconocida: '{estrategia}'")
 
 
@@ -65,6 +71,18 @@ def _por_presupuesto_quincenal(
     for tramo in tramos:
         resultado.extend(_clasificar_contra_limite(tramo, acumulado, limite))
         acumulado += tramo.minutos
+    return resultado
+
+
+def _por_jornada_diaria(tramos: list[Tramo], parametros: ProveedorParametros) -> list[Tramo]:
+    acumulado_por_dia: dict[date, int] = {}
+    resultado: list[Tramo] = []
+    for tramo in tramos:
+        acumulado = acumulado_por_dia.get(tramo.fecha, 0)
+        # el umbral diario se evalúa en la fecha del tramo (vigencia por fecha)
+        limite = int(parametros.horas_jornada_diaria(tramo.fecha) * MINUTOS_POR_HORA)
+        resultado.extend(_clasificar_contra_limite(tramo, acumulado, limite))
+        acumulado_por_dia[tramo.fecha] = acumulado + tramo.minutos
     return resultado
 
 

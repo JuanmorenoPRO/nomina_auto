@@ -1,4 +1,6 @@
 import type {
+  ConceptoManual,
+  ConfigUnidad,
   Empleado,
   Festivo,
   Liquidacion,
@@ -55,8 +57,41 @@ export const api = {
   },
   unidades: {
     listar: () => pedir<Unidad[]>("/unidades"),
-    crear: (datos: { nombre: string; nit: string }) =>
-      pedir<Unidad>("/unidades", { method: "POST", body: json(datos) }),
+    crear: (datos: {
+      nombre: string;
+      nit: string;
+      descuenta_seguridad_social?: boolean;
+      config?: ConfigUnidad;
+    }) => pedir<Unidad>("/unidades", { method: "POST", body: json(datos) }),
+    actualizar: (
+      id: string,
+      datos: Partial<{
+        nombre: string;
+        nit: string;
+        activa: boolean;
+        descuenta_seguridad_social: boolean;
+        config: ConfigUnidad;
+      }>,
+    ) => pedir<Unidad>(`/unidades/${id}`, { method: "PATCH", body: json(datos) }),
+  },
+  conceptosManuales: {
+    listar: (empleadoId?: string, periodoId?: string) => {
+      const q = new URLSearchParams();
+      if (empleadoId) q.set("empleado_id", empleadoId);
+      if (periodoId) q.set("periodo_id", periodoId);
+      const qs = q.toString();
+      return pedir<ConceptoManual[]>(`/conceptos-manuales${qs ? `?${qs}` : ""}`);
+    },
+    crear: (datos: {
+      empleado_id: string;
+      periodo_id: string;
+      tipo: "devengado" | "deduccion";
+      nombre: string;
+      valor: number;
+      salarial: boolean;
+    }) => pedir<ConceptoManual>("/conceptos-manuales", { method: "POST", body: json(datos) }),
+    eliminar: (id: string) =>
+      pedir<void>(`/conceptos-manuales/${id}`, { method: "DELETE" }),
   },
   empleados: {
     listar: (unidadId?: string) =>

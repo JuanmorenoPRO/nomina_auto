@@ -99,10 +99,107 @@ def test_validaciones_de_turnos(client):
     assert r.status_code == 422
 
 
+def test_descuento_seguridad_social_y_conceptos_manuales(client):
+    # Unidad que descuenta seguridad social, con estrategia 'diaria'.
+    unidad = client.post(
+        "/unidades",
+        json={
+            "nombre": "EDIFICIO CON DESCUENTO P.H.",
+            "nit": "811001922",
+            "descuenta_seguridad_social": True,
+            "config": {"estrategia_extras": "diaria", "factores_override": {}},
+        },
+    ).json()
+    assert unidad["descuenta_seguridad_social"] is True
+    assert unidad["config"]["estrategia_extras"] == "diaria"
+
+    empleado = client.post(
+        "/empleados",
+        json={"unidad_id": unidad["id"], "nombre": "MARIA", "documento": "43623487",
+              "cargo": "aseo", "salario_base": 1_750_905},
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-07-01", "fecha_fin": "2026-07-15"}
+    ).json()
+    client.post(
+        "/turnos",
+        json={"empleado_id": empleado["id"], "fecha": "2026-07-02",
+              "hora_inicio": "06:00", "hora_fin": "18:00"},  # 12h → 4 extra (diaria)
+    )
+    # Conceptos manuales: cuota de manejo (devengado no salarial) y un préstamo (deducción).
+    cuota = client.post(
+        "/conceptos-manuales",
+        json={"empleado_id": empleado["id"], "periodo_id": periodo["id"],
+              "tipo": "devengado", "nombre": "CUOTA DE MANEJO TARJETA",
+              "valor": 7095, "salarial": False},
+    )
+    assert cuota.status_code == 201, cuota.text
+    client.post(
+        "/conceptos-manuales",
+        json={"empleado_id": empleado["id"], "periodo_id": periodo["id"],
+              "tipo": "deduccion", "nombre": "PRÉSTAMO", "valor": 50000, "salarial": False},
+    )
+
+    liq = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    emp = liq["empleados"][0]
+    ded = {d["codigo"]: d["valor"] for d in emp["deducciones"]}
+    assert "aporte_salud" in ded and "aporte_pension" in ded
+    assert ded["aporte_salud"] == ded["aporte_pension"]  # 4% == 4%
+    assert emp["total_deducciones"] == sum(d["valor"] for d in emp["deducciones"])
+    assert emp["neto_a_pagar"] == emp["total_devengado"] - emp["total_deducciones"]
+    assert any(d["nombre"] == "PRÉSTAMO" and d["valor"] == 50000 for d in emp["deducciones"])
+    assert any(c["nombre"] == "CUOTA DE MANEJO TARJETA" for c in emp["conceptos"])
+
+    # PATCH: apagar el descuento → reliquidar deja solo las deducciones manuales.
+    client.patch(f"/unidades/{unidad['id']}", json={"descuenta_seguridad_social": False})
+    liq2 = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    ded2 = {d["codigo"] for d in liq2["empleados"][0]["deducciones"]}
+    assert "aporte_salud" not in ded2
+    assert liq2["empleados"][0]["deducciones"][0]["nombre"] == "PRÉSTAMO"
+
+
+def test_conceptos_fijos_por_unidad_se_aplican_solos(client):
+    # Unidad con un concepto fijo (cuota de manejo) que se aplica a TODOS sus empleados.
+    unidad = client.post(
+        "/unidades",
+        json={
+            "nombre": "UNIDAD CON CUOTA FIJA P.H.",
+            "config": {
+                "estrategia_extras": None,
+                "factores_override": {},
+                "conceptos_fijos": [
+                    {"nombre": "CUOTA DE MANEJO TARJETA", "valor": 7095,
+                     "tipo": "devengado", "salarial": False},
+                ],
+            },
+        },
+    ).json()
+    assert unidad["config"]["conceptos_fijos"][0]["valor"] == 7095
+
+    empleado = client.post(
+        "/empleados",
+        json={"unidad_id": unidad["id"], "nombre": "PEDRO", "documento": "999888",
+              "cargo": "todero", "salario_base": 1_750_905},
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-07-01", "fecha_fin": "2026-07-15"}
+    ).json()
+    client.post(
+        "/turnos",
+        json={"empleado_id": empleado["id"], "fecha": "2026-07-02",
+              "hora_inicio": "06:00", "hora_fin": "14:00"},
+    )
+    # Sin crear ningún concepto manual, la cuota aparece en la liquidación.
+    liq = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    conceptos = liq["empleados"][0]["conceptos"]
+    cuota = next(c for c in conceptos if c["nombre"] == "CUOTA DE MANEJO TARJETA")
+    assert cuota["valor"] == 7095
+
+
 def test_parametros_y_festivos(client):
     # historial sembrado y filtro por fecha
     todos = client.get("/parametros").json()
-    assert len(todos) == 20
+    assert len(todos) == 23
     vigentes = client.get("/parametros", params={"fecha": "2026-07-13"}).json()
     dominical = next(p for p in vigentes if p["codigo"] == "recargo_dominical_festivo")
     assert dominical["valor"] == "0.90"
