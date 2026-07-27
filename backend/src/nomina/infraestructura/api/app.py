@@ -32,10 +32,23 @@ async def _ciclo_de_vida(app: FastAPI):
     from nomina.infraestructura.persistencia.base import crear_engine, fabrica_sesiones
     from nomina.infraestructura.persistencia.sembrar import sembrar_parametros
 
+    from nomina.dominio.entidades.usuario import Rol
+    from nomina.infraestructura.persistencia.modelos import UsuarioModel
+    from nomina.infraestructura.seguridad.auth import crear_usuario
+
+    from sqlalchemy import select
+
     engine = crear_engine()
     if inspect(engine).has_table("parametro_legal"):
         with fabrica_sesiones(engine)() as session:
             sembrar_parametros(session)
+            cfg = settings()
+            if cfg.nomina_admin_email and cfg.nomina_admin_password:
+                existe = session.scalars(
+                    select(UsuarioModel).where(UsuarioModel.rol == Rol.ADMIN.value)
+                ).first()
+                if not existe:
+                    crear_usuario(session, cfg.nomina_admin_email, cfg.nomina_admin_password, Rol.ADMIN)
             session.commit()
     yield
 

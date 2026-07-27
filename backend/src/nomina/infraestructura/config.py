@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     duracion_sesion_horas: int = 12
     cookie_segura: bool = False  # True en producción (HTTPS)
     static_dir: str = ""  # vacío en dev; en prod = /app/frontend/dist
+    nomina_admin_email: str = ""  # si se setea, crea el admin al primer arranque
+    nomina_admin_password: str = ""
 
 
 @lru_cache
