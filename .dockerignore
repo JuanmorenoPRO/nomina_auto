@@ -1,5 +1,6 @@
 frontend/node_modules
 frontend/dist
+backend/.venv
 backend/__pycache__
 backend/.pytest_cache
 backend/nomina_dev.sqlite3

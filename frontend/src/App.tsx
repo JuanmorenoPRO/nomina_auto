@@ -6,6 +6,7 @@ import { PaginaLiquidacion } from "./paginas/Liquidacion";
 import { Configuracion } from "./paginas/Configuracion";
 import { Entidades } from "./paginas/Entidades";
 import { Login } from "./paginas/Login";
+import { CambiarContrasena } from "./paginas/CambiarContrasena";
 
 type Pestana = "turnos" | "liquidacion" | "configuracion" | "entidades";
 
@@ -23,6 +24,7 @@ export default function App() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [verificando, setVerificando] = useState(true);
   const [pestana, setPestana] = useState<Pestana>("turnos");
+  const [cambiandoClave, setCambiandoClave] = useState(false);
   const [unidades, setUnidades] = useState<Unidad[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
 
@@ -75,9 +77,11 @@ export default function App() {
         </nav>
         <span style={{ marginLeft: "auto", fontSize: 13 }}>
           {usuario.email} ({usuario.rol}){" "}
+          <button className="secundario" onClick={() => setCambiandoClave(true)}>Cambiar contraseña</button>{" "}
           <button className="secundario" onClick={salir}>Salir</button>
         </span>
       </header>
+      {cambiandoClave && <CambiarContrasena alCerrar={() => setCambiandoClave(false)} />}
       <main className="contenedor">
         {activa === "turnos" && <GrillaTurnos unidades={unidades} periodos={periodos} />}
         {activa === "liquidacion" && (

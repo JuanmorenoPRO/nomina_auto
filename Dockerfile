@@ -16,6 +16,6 @@ COPY backend/ ./
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 ENV PYTHONPATH=/app/backend/src
 ENV STATIC_DIR=/app/frontend/dist
-CMD sh -c "uv run alembic upgrade head && \
-  uv run uvicorn nomina.infraestructura.api.app:crear_app \
+CMD sh -c "uv run --no-sync alembic upgrade head && \
+  uv run --no-sync uvicorn nomina.infraestructura.api.app:crear_app \
   --factory --host 0.0.0.0 --port ${PORT:-8001}"

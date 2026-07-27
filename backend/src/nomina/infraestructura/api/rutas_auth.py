@@ -17,6 +17,7 @@ from nomina.infraestructura.seguridad.auditoria import auditar, ultimos_registro
 from nomina.infraestructura.seguridad.auth import (
     COOKIE_SESION,
     UsuarioAdmin,
+    cambiar_contrasena,
     cerrar_sesion,
     crear_usuario,
     desactivar_usuario,
@@ -40,6 +41,11 @@ class UsuarioRespuesta(BaseModel):
     email: str
     rol: str
     activo: bool = True
+
+
+class CambiarContrasenaSolicitud(BaseModel):
+    contrasena_actual: str = Field(min_length=1, max_length=200)
+    contrasena_nueva: str = Field(min_length=10, max_length=200)
 
 
 class UsuarioCrear(BaseModel):
@@ -93,6 +99,17 @@ def logout(request: Request, respuesta: Response, session: Sesion) -> None:
 @router.get("/auth/yo", response_model=UsuarioRespuesta)
 def yo(usuario: Annotated[Usuario, Depends(usuario_actual)]) -> UsuarioRespuesta:
     return UsuarioRespuesta(id=usuario.id, email=usuario.email, rol=usuario.rol.value)
+
+
+@router.put("/auth/yo/contrasena", status_code=204)
+def cambiar_mi_contrasena(
+    datos: CambiarContrasenaSolicitud,
+    usuario: Annotated[Usuario, Depends(usuario_actual)],
+    session: Sesion,
+) -> None:
+    cambiar_contrasena(session, usuario.id, datos.contrasena_actual, datos.contrasena_nueva)
+    auditar(session, usuario.email, "cambiar_contrasena", "usuario", str(usuario.id),
+            antes=None, despues=None)
 
 
 @router.get("/usuarios", response_model=list[UsuarioRespuesta])
