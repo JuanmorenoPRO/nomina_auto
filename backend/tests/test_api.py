@@ -238,6 +238,12 @@ def test_reabrir_periodo(client):
     ).json()
     client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]})
 
-    assert client.get("/periodos").json()[0]["estado"] == "liquidado"
+    # liquidar una unidad no cierra el periodo: sigue abierto
+    assert client.get("/periodos").json()[0]["estado"] == "abierto"
+
+    # marcar todo el periodo como liquidado es un paso explícito
+    m = client.post(f"/periodos/{periodo['id']}/liquidar-periodo")
+    assert m.status_code == 200 and m.json()["estado"] == "liquidado"
+
     r = client.post(f"/periodos/{periodo['id']}/reabrir")
     assert r.status_code == 200 and r.json()["estado"] == "abierto"

@@ -126,6 +126,8 @@ export const api = {
     actualizar: (id: string, datos: Partial<{ fecha_inicio: string; fecha_fin: string }>) =>
       pedir<Periodo>(`/periodos/${id}`, { method: "PATCH", body: json(datos) }),
     reabrir: (id: string) => pedir<Periodo>(`/periodos/${id}/reabrir`, { method: "POST" }),
+    marcarLiquidado: (id: string) =>
+      pedir<Periodo>(`/periodos/${id}/liquidar-periodo`, { method: "POST" }),
     cerrar: (id: string) => pedir<Periodo>(`/periodos/${id}/cerrar`, { method: "POST" }),
     turnos: (id: string, unidadId?: string) =>
       pedir<Turno[]>(`/periodos/${id}/turnos${unidadId ? `?unidad_id=${unidadId}` : ""}`),
