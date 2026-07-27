@@ -1,49 +1,20 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Empleado, Festivo, Periodo, Turno, Unidad } from "../tipos";
-
-const DIAS_SEMANA = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+import {
+  DIAS_SEMANA,
+  diasDelPeriodo,
+  fechaLocal,
+  minutosDeTurno,
+  normalizarHora,
+} from "../turnos-util";
+import { PreviaTurnosEmpleado } from "./PreviaTurnosEmpleado";
 
 /** Referencia estable para celdas sin turnos: evita romper la memoización. */
 const SIN_TURNOS: Turno[] = [];
 
 /** Celda con foco/clic: identifica fila (empleado) y columna (día) activas. */
 type CeldaActiva = { fila: number; col: number } | null;
-
-function fechaLocal(iso: string): Date {
-  const [a, m, d] = iso.split("-").map(Number);
-  return new Date(a, m - 1, d);
-}
-
-function diasDelPeriodo(periodo: Periodo): string[] {
-  const dias: string[] = [];
-  const fin = fechaLocal(periodo.fecha_fin);
-  for (let f = fechaLocal(periodo.fecha_inicio); f <= fin; f.setDate(f.getDate() + 1)) {
-    const mes = String(f.getMonth() + 1).padStart(2, "0");
-    const dia = String(f.getDate()).padStart(2, "0");
-    dias.push(`${f.getFullYear()}-${mes}-${dia}`);
-  }
-  return dias;
-}
-
-/** Acepta "18", "18:30", "6" y devuelve "HH:MM"; null si no es una hora. */
-function normalizarHora(texto: string): string | null {
-  const limpio = texto.trim();
-  const m = /^(\d{1,2})(?::(\d{2}))?$/.exec(limpio);
-  if (!m) return null;
-  const horas = Number(m[1]);
-  const minutos = Number(m[2] ?? "0");
-  if (horas > 23 || minutos > 59) return null;
-  return `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}`;
-}
-
-function minutosDeTurno(t: Turno): number {
-  const [hi, mi] = t.hora_inicio.split(":").map(Number);
-  const [hf, mf] = t.hora_fin.split(":").map(Number);
-  const inicio = hi * 60 + mi;
-  const fin = hf * 60 + mf;
-  return fin <= inicio ? fin + 24 * 60 - inicio : fin - inicio;
-}
 
 export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; periodos: Periodo[] }) {
   const [unidadId, setUnidadId] = useState("");
@@ -53,6 +24,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
   const [festivos, setFestivos] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [activa, setActiva] = useState<CeldaActiva>(null);
+  const [empleadoPrevia, setEmpleadoPrevia] = useState<Empleado | null>(null);
 
   // Callback estable: solo cambia el estado si la celda activa es distinta,
   // para no re-renderizar celdas ya resaltadas.
@@ -213,7 +185,17 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
                         className={`nombre-empleado${filaActiva ? " fila-activa" : ""}`}
                         title={emp.cargo}
                       >
-                        {emp.nombre}
+                        <span className="nombre-empleado-contenido">
+                          <button
+                            type="button"
+                            className="boton-previa"
+                            title="Previsualizar turnos (formato tarjeta)"
+                            onClick={() => setEmpleadoPrevia(emp)}
+                          >
+                            🗂
+                          </button>
+                          {emp.nombre}
+                        </span>
                       </td>
                       {dias.map((d, col) => (
                         <CeldaTurno
@@ -243,6 +225,19 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
           </div>
           {empleados.length === 0 && (
             <p className="pista">La unidad no tiene empleados: créelos en «Unidades y empleados».</p>
+          )}
+          {empleadoPrevia && (
+            <PreviaTurnosEmpleado
+              empleado={empleadoPrevia}
+              unidad={unidades.find((u) => u.id === unidadId)!}
+              periodo={periodo}
+              dias={dias}
+              festivos={festivos}
+              turnos={turnos.filter((t) => t.empleado_id === empleadoPrevia.id)}
+              soloLectura={soloLectura}
+              alCerrar={() => setEmpleadoPrevia(null)}
+              alGuardado={recargarTurnos}
+            />
           )}
         </>
       )}
