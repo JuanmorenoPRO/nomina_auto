@@ -1,0 +1,10 @@
+frontend/node_modules
+frontend/dist
+backend/__pycache__
+backend/.pytest_cache
+backend/nomina_dev.sqlite3
+backend/.env
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.git

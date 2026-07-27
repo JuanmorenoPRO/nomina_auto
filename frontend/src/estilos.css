@@ -83,12 +83,75 @@ table.datos td.numero, table.datos th.numero { text-align: right; font-variant-n
 .exito { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;
   padding: 8px 12px; border-radius: 6px; margin: 12px 0; font-size: 13px; }
 
-/* Grilla de turnos */
-.grilla-envoltura { overflow-x: auto; }
-table.grilla { border-collapse: collapse; background: white; font-size: 12px; }
-table.grilla th, table.grilla td { border: 1px solid #dbe4ee; padding: 3px; }
-table.grilla th { background: #eef4fa; position: sticky; top: 0; }
-table.grilla th.dia-descanso { background: #fdecec; }
+/* Grilla de turnos — tabla tipo Excel con encabezado y 1ª columna fijos */
+.grilla-envoltura {
+  overflow: auto;                     /* scroll en ambos ejes */
+  max-height: calc(100vh - 220px);    /* habilita el encabezado fijo */
+  position: relative;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+}
+table.grilla {
+  /* Colores del resaltado centralizados en variables reutilizables */
+  --linea: #dbe4ee;
+  --encabezado: #eef4fa;
+  --resalte-linea: #f5f9ff;   /* fila / columna activa */
+  --resalte-cruce: #eaf3ff;   /* intersección fila×columna */
+  --activa-fondo: #dbeafe;    /* celda activa */
+  --activa-borde: #2563eb;
+  /* `separate` es necesario para que `position: sticky` no pierda los bordes */
+  border-collapse: separate;
+  border-spacing: 0;
+  background: white;
+  font-size: 12px;
+}
+table.grilla th, table.grilla td {
+  border-right: 1px solid var(--linea);
+  border-bottom: 1px solid var(--linea);
+  padding: 3px;
+  background-clip: padding-box;
+}
+table.grilla th:first-child, table.grilla td:first-child {
+  border-left: 1px solid var(--linea);
+}
+table.grilla thead th { border-top: 1px solid var(--linea); }
+
+/* Encabezado fijo al hacer scroll vertical */
+table.grilla thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--encabezado);
+}
+table.grilla thead th.dia-descanso { background: #fdecec; }
+table.grilla thead th.col-activa { background: var(--resalte-cruce); }
+
+/* Primera columna (Empleado) fija al hacer scroll horizontal */
+table.grilla td.nombre-empleado {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: white;
+}
+/* Esquina superior izquierda: fija en ambos ejes */
+table.grilla th.esquina {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--encabezado);
+}
+
+/* Resaltado de fila / columna / intersección de la celda activa */
+table.grilla td.fila-activa,
+table.grilla td.col-activa { background: var(--resalte-linea); }
+table.grilla td.fila-activa.col-activa,
+table.grilla td.nombre-empleado.fila-activa { background: var(--resalte-cruce); }
+/* La celda activa gana sobre los resaltados de fila/columna */
+table.grilla td.celda-turno.activa {
+  background: var(--activa-fondo);
+  box-shadow: inset 0 0 0 2px var(--activa-borde);
+}
+
 table.grilla td.celda-turno { min-width: 92px; vertical-align: top; }
 table.grilla td .chip {
   display: flex;
@@ -112,6 +175,7 @@ table.grilla td input {
   padding: 2px 4px;
 }
 table.grilla td.total { font-weight: 600; text-align: right; background: #f8fafc; }
+table.grilla td.total.fila-activa { background: var(--resalte-linea); }
 .nombre-empleado { font-weight: 600; white-space: nowrap; }
 .pista { color: #64748b; font-size: 12px; margin: 8px 0; }
 .campo.casilla, label.casilla {

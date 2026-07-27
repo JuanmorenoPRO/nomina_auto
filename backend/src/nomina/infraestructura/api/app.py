@@ -7,10 +7,12 @@ Ejecutar en desarrollo:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
 from nomina.aplicacion.errores import NoEncontradoError, ReglaDeNegocioError
@@ -30,10 +32,23 @@ async def _ciclo_de_vida(app: FastAPI):
     from nomina.infraestructura.persistencia.base import crear_engine, fabrica_sesiones
     from nomina.infraestructura.persistencia.sembrar import sembrar_parametros
 
+    from nomina.dominio.entidades.usuario import Rol
+    from nomina.infraestructura.persistencia.modelos import UsuarioModel
+    from nomina.infraestructura.seguridad.auth import crear_usuario
+
+    from sqlalchemy import select
+
     engine = crear_engine()
     if inspect(engine).has_table("parametro_legal"):
         with fabrica_sesiones(engine)() as session:
             sembrar_parametros(session)
+            cfg = settings()
+            if cfg.nomina_admin_email and cfg.nomina_admin_password:
+                existe = session.scalars(
+                    select(UsuarioModel).where(UsuarioModel.rol == Rol.ADMIN.value)
+                ).first()
+                if not existe:
+                    crear_usuario(session, cfg.nomina_admin_email, cfg.nomina_admin_password, Rol.ADMIN)
             session.commit()
     yield
 
@@ -82,6 +97,15 @@ def crear_app() -> FastAPI:
     async def _valor_invalido(_: Request, exc: ValueError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
-    app.include_router(router_auth)
-    app.include_router(router)
+    app.include_router(router_auth, prefix="/api")
+    app.include_router(router, prefix="/api")
+
+    dist = Path(settings().static_dir) if settings().static_dir else None
+    if dist and dist.exists():
+        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+        @app.get("/{full_path:path}")
+        async def _spa(_: Request, full_path: str) -> FileResponse:
+            return FileResponse(dist / "index.html")
+
     return app

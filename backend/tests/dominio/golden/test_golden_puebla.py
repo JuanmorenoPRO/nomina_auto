@@ -3,7 +3,14 @@
 Reproduce la planilla real de la contadora (`NOMINA PUEBLA JULIO.xlsx`) con el motor:
 turnos reconstruidos + estrategia `diaria` + factores por unidad + descuento de
 seguridad social. Los valores esperados son los del documento (redondeados a peso),
-salvo dos diferencias DOCUMENTADAS:
+salvo dos diferencias DOCUMENTADAS.
+
+NOTA: la unidad Puebla en vivo usa hoy la estrategia `jornada` (extras por turno
+continuo, decisión del usuario). Este test fija `diaria` a propósito para conservar
+la reproducción del documento como referencia verificada; el comportamiento `jornada`
+se prueba en `tests/dominio/test_clasificador_jornada.py`.
+
+Diferencias documentadas:
 
 - Maria, NOCTURNO DOMINICAL: el documento cuenta 9 h (2 de ellas de un turno de
   domingo que cruza a lunes); el motor corta el dominical a medianoche (regla de
@@ -28,7 +35,7 @@ CALENDARIO = CalendarioFestivos()
 def _liquidar(documento: str):
     tramos = segmentar_turnos(puebla.turnos_de(documento), PARAMETROS, CALENDARIO)
     clasificados = clasificar_extras(
-        tramos, PARAMETROS, puebla.PERIODO_INICIO, estrategia=puebla.ESTRATEGIA_EXTRAS
+        tramos, PARAMETROS, puebla.PERIODO_INICIO, estrategia="diaria"
     )
     return liquidar(
         clasificados,
@@ -103,7 +110,7 @@ def test_puebla_descuenta_solo_si_la_unidad_lo_pide():
     """Sin descontar_seguridad_social no hay deducciones automáticas."""
     tramos = segmentar_turnos(puebla.turnos_de("43623487"), PARAMETROS, CALENDARIO)
     clasificados = clasificar_extras(
-        tramos, PARAMETROS, puebla.PERIODO_INICIO, estrategia=puebla.ESTRATEGIA_EXTRAS
+        tramos, PARAMETROS, puebla.PERIODO_INICIO, estrategia="diaria"
     )
     liq = liquidar(
         clasificados, puebla.SALARIO_BASICO, PARAMETROS, puebla.PERIODO_INICIO,

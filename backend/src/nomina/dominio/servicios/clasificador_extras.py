@@ -9,8 +9,15 @@ La estrategia es un parámetro con vigencias (`estrategia_clasificacion_extras`)
   `jornada_maxima_semanal` vigente en la fecha de cada tramo (44 h → 42 h el
   15-jul-2026). Solo cuenta lo trabajado dentro del periodo liquidado.
 - `diaria`: umbral por día calendario — lo que exceda `horas_jornada_diaria`
-  (hoy 8 h) trabajadas en un mismo día es extra. Es la regla de algunas planillas
-  (ej. Puebla): un día de 12 h paga 8 h ordinarias/recargo y 4 h extra.
+  (hoy 8 h) trabajadas en un mismo día es extra. Un día de 12 h paga 8 h
+  ordinarias/recargo y 4 h extra. Ojo: la cola de un turno que cruzó medianoche
+  cuenta en el día calendario siguiente.
+- `jornada`: umbral por TURNO/jornada continua — cada bloque de trabajo sin
+  interrupción (los tramos contiguos, aunque crucen medianoche, son una sola
+  jornada) paga sus primeras `horas_jornada_diaria` como ordinarias y el resto
+  como extra. Así, un turno sáb 18:00→06:00 paga las últimas horas como extra en
+  la madrugada del domingo (extra nocturna dominical). Un descanso entre turnos
+  abre una jornada nueva con su propio umbral.
 
 Si el umbral cae dentro de un tramo, el tramo se parte en dos; la clasificación
 conserva franja y tipo de día (una extra nocturna dominical sigue siéndolo).
@@ -27,6 +34,7 @@ from nomina.dominio.valores.tramo import Tramo
 PRESUPUESTO_QUINCENAL = "presupuesto_quincenal"
 SEMANAL_LEGAL = "semanal_legal"
 DIARIA = "diaria"
+JORNADA = "jornada"
 
 
 def clasificar_extras(
@@ -48,6 +56,8 @@ def clasificar_extras(
         return _por_semana_legal(ordenados, parametros)
     if estrategia == DIARIA:
         return _por_jornada_diaria(ordenados, parametros)
+    if estrategia == JORNADA:
+        return _por_jornada_continua(ordenados, parametros)
     raise ValueError(f"Estrategia de clasificación desconocida: '{estrategia}'")
 
 
@@ -83,6 +93,26 @@ def _por_jornada_diaria(tramos: list[Tramo], parametros: ProveedorParametros) ->
         limite = int(parametros.horas_jornada_diaria(tramo.fecha) * MINUTOS_POR_HORA)
         resultado.extend(_clasificar_contra_limite(tramo, acumulado, limite))
         acumulado_por_dia[tramo.fecha] = acumulado + tramo.minutos
+    return resultado
+
+
+def _por_jornada_continua(tramos: list[Tramo], parametros: ProveedorParametros) -> list[Tramo]:
+    """Umbral por bloque de trabajo continuo: los tramos contiguos (fin de uno =
+    inicio del siguiente) forman una jornada, aunque crucen medianoche. Un hueco
+    de descanso abre una jornada nueva con su propio umbral."""
+    resultado: list[Tramo] = []
+    acumulado = 0
+    fin_anterior = None
+    fecha_jornada: date | None = None
+    for tramo in tramos:
+        if fin_anterior is None or tramo.inicio != fin_anterior:
+            acumulado = 0  # nueva jornada (primer tramo o hueco de descanso)
+            fecha_jornada = tramo.fecha
+        # el umbral se evalúa con la vigencia de la fecha de inicio de la jornada
+        limite = int(parametros.horas_jornada_diaria(fecha_jornada) * MINUTOS_POR_HORA)
+        resultado.extend(_clasificar_contra_limite(tramo, acumulado, limite))
+        acumulado += tramo.minutos
+        fin_anterior = tramo.fin
     return resultado
 
 
