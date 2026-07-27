@@ -44,6 +44,11 @@ export const api = {
       pedir<Usuario>("/auth/login", { method: "POST", body: json({ email, contrasena }) }),
     logout: () => pedir<void>("/auth/logout", { method: "POST" }),
     yo: () => pedir<Usuario>("/auth/yo"),
+    cambiarContrasena: (contrasena_actual: string, contrasena_nueva: string) =>
+      pedir<void>("/auth/yo/contrasena", {
+        method: "PUT",
+        body: json({ contrasena_actual, contrasena_nueva }),
+      }),
   },
   usuarios: {
     listar: () => pedir<Usuario[]>("/usuarios"),

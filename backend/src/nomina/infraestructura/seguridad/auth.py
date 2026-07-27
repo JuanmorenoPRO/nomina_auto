@@ -150,6 +150,16 @@ UsuarioContadora = Annotated[Usuario, Depends(requiere(Rol.CONTADORA))]
 UsuarioAdmin = Annotated[Usuario, Depends(requiere(Rol.ADMIN))]
 
 
+def cambiar_contrasena(
+    session: Session, usuario_id: UUID, contrasena_actual: str, contrasena_nueva: str
+) -> None:
+    modelo = session.get(UsuarioModel, usuario_id)
+    if modelo is None or not verificar(modelo.hash_password, contrasena_actual):
+        raise CredencialesInvalidasError("Contraseña actual incorrecta")
+    modelo.hash_password = hashear(contrasena_nueva)
+    session.flush()
+
+
 def desactivar_usuario(session: Session, usuario_id: UUID) -> Usuario | None:
     modelo = session.get(UsuarioModel, usuario_id)
     if modelo is None:
