@@ -3,6 +3,10 @@
 Segmenta y clasifica los turnos de cada empleado activo de la unidad, calcula
 los conceptos y persiste una liquidación VERSIONADA con snapshot de los
 parámetros usados. Reliquidar nunca sobrescribe: crea la versión siguiente.
+
+Liquidar una unidad NO cierra el periodo: este queda ABIERTO para poder
+liquidar otras unidades o corregir turnos sin reabrir. Marcar todo el periodo
+como liquidado es un paso explícito aparte (ver `MarcarPeriodoLiquidado`).
 """
 
 from __future__ import annotations
@@ -143,5 +147,4 @@ class LiquidarQuincena:
             for p in lista_parametros
         ]
         self.liquidaciones.guardar(liquidacion, snapshot)
-        self.periodos.guardar(periodo.con_estado(EstadoPeriodo.LIQUIDADO))
         return liquidacion

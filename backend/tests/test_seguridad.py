@@ -194,6 +194,9 @@ def test_cierre_definitivo_de_quincena(client):
     assert client.post(f"/periodos/{periodo_id}/cerrar").status_code == 409
 
     client.post(f"/periodos/{periodo_id}/liquidar", json={"unidad_id": datos["unidad"]["id"]})
+    # liquidar una unidad no cierra el periodo; hay que marcarlo como liquidado primero
+    assert client.post(f"/periodos/{periodo_id}/cerrar").status_code == 409
+    client.post(f"/periodos/{periodo_id}/liquidar-periodo")
     assert client.post(f"/periodos/{periodo_id}/cerrar").json()["estado"] == "cerrado"
 
     # cerrado = solo lectura para siempre

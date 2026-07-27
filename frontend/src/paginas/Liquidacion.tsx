@@ -19,6 +19,9 @@ export function PaginaLiquidacion({
   const [detalle, setDetalle] = useState<Liquidacion | null>(null);
   const [error, setError] = useState("");
   const [liquidando, setLiquidando] = useState(false);
+  const [marcando, setMarcando] = useState(false);
+
+  const periodo = periodos.find((p) => p.id === periodoId);
 
   const recargarHistorial = useCallback(async () => {
     if (!periodoId) return setHistorial([]);
@@ -37,11 +40,23 @@ export function PaginaLiquidacion({
       const resultado = await api.periodos.liquidar(periodoId, unidadId);
       setDetalle(resultado);
       await recargarHistorial();
-      await alCambiar(); // el periodo cambió a «liquidado»
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLiquidando(false);
+    }
+  }
+
+  async function marcarPeriodoLiquidado() {
+    setError("");
+    setMarcando(true);
+    try {
+      await api.periodos.marcarLiquidado(periodoId);
+      await alCambiar(); // el periodo pasó a «liquidado»
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setMarcando(false);
     }
   }
 
@@ -78,7 +93,9 @@ export function PaginaLiquidacion({
         </button>
       </div>
       <p className="pista">
-        Reliquidar crea una nueva versión: las versiones anteriores no se modifican.
+        Liquidar una unidad no cierra la quincena: puede liquidar varias unidades del
+        mismo periodo sin reabrirlo. Reliquidar crea una nueva versión; las anteriores no
+        se modifican.
       </p>
 
       {error && <div className="error">{error}</div>}
@@ -119,6 +136,22 @@ export function PaginaLiquidacion({
       )}
 
       {detalle && <DetalleLiquidacion liquidacion={detalle} />}
+
+      {periodo && periodo.estado === "abierto" && historial.length > 0 && (
+        <div className="tarjeta">
+          <p className="pista">
+            ¿Ya liquidó todas las unidades de esta quincena? Marque el periodo completo como
+            liquidado. (Podrá reabrirlo si necesita corregir algo.)
+          </p>
+          <button
+            className="principal"
+            disabled={marcando}
+            onClick={marcarPeriodoLiquidado}
+          >
+            {marcando ? "Marcando…" : "Marcar todo el periodo como liquidado"}
+          </button>
+        </div>
+      )}
     </>
   );
 }

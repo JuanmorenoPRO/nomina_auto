@@ -22,6 +22,7 @@ from nomina.aplicacion.casos_uso.actualizar_parametro import ActualizarParametro
 from nomina.aplicacion.casos_uso.cerrar_quincena import CerrarQuincena
 from nomina.aplicacion.casos_uso.exportar_liquidacion import ExportarLiquidacion
 from nomina.aplicacion.casos_uso.liquidar_quincena import LiquidarQuincena
+from nomina.aplicacion.casos_uso.marcar_periodo_liquidado import MarcarPeriodoLiquidado
 from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
 from nomina.dominio.entidades.concepto_liquidado import (
     ConceptoManual,
@@ -292,6 +293,19 @@ def reabrir_periodo(periodo_id: UUID, usuario: UsuarioContadora, session: Sesion
     auditar(session, usuario.email, "reabrir", "periodo", str(periodo_id),
             antes={"estado": periodo.estado.value}, despues={"estado": "abierto"})
     return traductores.periodo_a_schema(reabierto)
+
+
+@router.post("/periodos/{periodo_id}/liquidar-periodo", response_model=schemas.PeriodoRespuesta)
+def marcar_periodo_liquidado(periodo_id: UUID, usuario: UsuarioContadora, session: Sesion):
+    """Marca TODO el periodo como liquidado (paso explícito tras liquidar las unidades)."""
+    caso = MarcarPeriodoLiquidado(
+        periodos=RepositorioPeriodosSQL(session),
+        liquidaciones=RepositorioLiquidacionesSQL(session),
+    )
+    marcado = caso.ejecutar(periodo_id)
+    auditar(session, usuario.email, "liquidar-periodo", "periodo", str(periodo_id),
+            despues={"estado": "liquidado"})
+    return traductores.periodo_a_schema(marcado)
 
 
 @router.post("/periodos/{periodo_id}/cerrar", response_model=schemas.PeriodoRespuesta)

@@ -8,6 +8,7 @@ import pytest
 
 from nomina.aplicacion.casos_uso.actualizar_parametro import ActualizarParametro
 from nomina.aplicacion.casos_uso.liquidar_quincena import LiquidarQuincena
+from nomina.aplicacion.casos_uso.marcar_periodo_liquidado import MarcarPeriodoLiquidado
 from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
 from nomina.aplicacion.errores import NoEncontradoError, ReglaDeNegocioError
 from nomina.dominio.entidades.empleado import Empleado
@@ -100,8 +101,8 @@ def test_liquidar_quincena_caso_contadora_via_bd(session, contexto):
     assert valores["auxilio_transporte"] == Decimal(124_548)
     assert por_empleado.liquidacion.total == Decimal(1_479_048)
 
-    # el periodo quedó liquidado y la liquidación es recuperable tal cual
-    assert RepositorioPeriodosSQL(session).obtener(periodo.id).estado is EstadoPeriodo.LIQUIDADO
+    # liquidar una unidad NO cierra el periodo: queda abierto para otras unidades
+    assert RepositorioPeriodosSQL(session).obtener(periodo.id).estado is EstadoPeriodo.ABIERTO
     recuperada = RepositorioLiquidacionesSQL(session).obtener(liquidacion.id)
     assert recuperada.total == Decimal(1_479_048)
     assert recuperada.por_empleado[0].liquidacion.conceptos == por_empleado.liquidacion.conceptos
@@ -112,11 +113,7 @@ def test_reliquidar_crea_nueva_version_y_no_sobrescribe(session, contexto):
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))
     primera = _liquidar(session).ejecutar(periodo.id, unidad.id)
 
-    # corregir exige reabrir el periodo (quedó liquidado)
-    with pytest.raises(ReglaDeNegocioError, match="reábralo"):
-        _registrar(session).ejecutar(empleado.id, date(2026, 6, 18), time(6), time(14))
-    repo_periodos = RepositorioPeriodosSQL(session)
-    repo_periodos.guardar(repo_periodos.obtener(periodo.id).con_estado(EstadoPeriodo.ABIERTO))
+    # el periodo sigue abierto tras liquidar: se puede corregir sin reabrir
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 18), time(6), time(14))
 
     segunda = _liquidar(session).ejecutar(periodo.id, unidad.id)
@@ -125,6 +122,30 @@ def test_reliquidar_crea_nueva_version_y_no_sobrescribe(session, contexto):
     repo = RepositorioLiquidacionesSQL(session)
     assert {liq.version for liq in repo.listar(periodo_id=periodo.id)} == {1, 2}
     assert repo.obtener(primera.id) is not None
+
+
+def _marcar(session) -> MarcarPeriodoLiquidado:
+    return MarcarPeriodoLiquidado(
+        periodos=RepositorioPeriodosSQL(session),
+        liquidaciones=RepositorioLiquidacionesSQL(session),
+    )
+
+
+def test_marcar_periodo_liquidado_es_paso_explicito(session, contexto):
+    unidad, empleado, periodo = contexto
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))
+
+    # sin liquidaciones no se puede marcar el periodo completo
+    with pytest.raises(ReglaDeNegocioError, match="al menos una unidad"):
+        _marcar(session).ejecutar(periodo.id)
+
+    _liquidar(session).ejecutar(periodo.id, unidad.id)
+    marcado = _marcar(session).ejecutar(periodo.id)
+    assert marcado.estado is EstadoPeriodo.LIQUIDADO
+    assert RepositorioPeriodosSQL(session).obtener(periodo.id).estado is EstadoPeriodo.LIQUIDADO
+
+    # idempotente: marcar de nuevo un periodo ya liquidado no falla
+    assert _marcar(session).ejecutar(periodo.id).estado is EstadoPeriodo.LIQUIDADO
 
 
 def test_liquidacion_guarda_snapshot_de_parametros(session, contexto):
