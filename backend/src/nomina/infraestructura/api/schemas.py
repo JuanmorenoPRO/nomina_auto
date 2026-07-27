@@ -67,6 +67,22 @@ class EmpleadoCrear(BaseModel):
         return v.strip()
 
 
+class EmpleadoActualizar(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1, max_length=200)
+    tipo_documento: str | None = Field(default=None, max_length=5)
+    documento: str | None = Field(default=None, min_length=3, max_length=20)
+    cargo: str | None = Field(default=None, min_length=1, max_length=100)
+    salario_base: int | None = Field(default=None, gt=0)
+    activo: bool | None = None
+
+    @field_validator("documento")
+    @classmethod
+    def documento_numerico(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip().isdigit():
+            raise ValueError("El documento debe ser numérico")
+        return v.strip() if v is not None else v
+
+
 class EmpleadoRespuesta(BaseModel):
     id: UUID
     unidad_id: UUID
@@ -104,6 +120,21 @@ class PeriodoCrear(BaseModel):
     @field_validator("fecha_fin")
     @classmethod
     def fin_no_antes_de_inicio(cls, v: date, info) -> date:
+        inicio = info.data.get("fecha_inicio")
+        if inicio and v < inicio:
+            raise ValueError("fecha_fin no puede ser anterior a fecha_inicio")
+        return v
+
+
+class PeriodoActualizar(BaseModel):
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+
+    @field_validator("fecha_fin")
+    @classmethod
+    def fin_no_antes_de_inicio(cls, v: date | None, info) -> date | None:
+        if v is None:
+            return v
         inicio = info.data.get("fecha_inicio")
         if inicio and v < inicio:
             raise ValueError("fecha_fin no puede ser anterior a fecha_inicio")

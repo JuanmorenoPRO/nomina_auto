@@ -108,11 +108,23 @@ export const api = {
       cargo: string;
       salario_base: number;
     }) => pedir<Empleado>("/empleados", { method: "POST", body: json(datos) }),
+    actualizar: (
+      id: string,
+      datos: Partial<{
+        nombre: string;
+        documento: string;
+        cargo: string;
+        salario_base: number;
+        activo: boolean;
+      }>,
+    ) => pedir<Empleado>(`/empleados/${id}`, { method: "PATCH", body: json(datos) }),
   },
   periodos: {
     listar: () => pedir<Periodo[]>("/periodos"),
     crear: (datos: { fecha_inicio: string; fecha_fin: string }) =>
       pedir<Periodo>("/periodos", { method: "POST", body: json(datos) }),
+    actualizar: (id: string, datos: Partial<{ fecha_inicio: string; fecha_fin: string }>) =>
+      pedir<Periodo>(`/periodos/${id}`, { method: "PATCH", body: json(datos) }),
     reabrir: (id: string) => pedir<Periodo>(`/periodos/${id}/reabrir`, { method: "POST" }),
     cerrar: (id: string) => pedir<Periodo>(`/periodos/${id}/cerrar`, { method: "POST" }),
     turnos: (id: string, unidadId?: string) =>

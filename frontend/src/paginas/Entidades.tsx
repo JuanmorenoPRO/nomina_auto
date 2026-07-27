@@ -30,6 +30,8 @@ type Props = { alCambiar: () => Promise<void>; setError: (m: string) => void };
 
 function SeccionUnidades({ unidades, alCambiar, setError }: Props & { unidades: Unidad[] }) {
   const [form, setForm] = useState({ nombre: "", nit: "", descuenta: false });
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [formEdicion, setFormEdicion] = useState({ nombre: "", nit: "", descuenta: false });
 
   async function crear(e: React.FormEvent) {
     e.preventDefault();
@@ -47,12 +49,20 @@ function SeccionUnidades({ unidades, alCambiar, setError }: Props & { unidades: 
     }
   }
 
-  async function alternarDescuento(u: Unidad) {
+  function iniciarEdicion(u: Unidad) {
+    setEditandoId(u.id);
+    setFormEdicion({ nombre: u.nombre, nit: u.nit, descuenta: u.descuenta_seguridad_social });
+  }
+
+  async function guardarEdicion(u: Unidad) {
     setError("");
     try {
       await api.unidades.actualizar(u.id, {
-        descuenta_seguridad_social: !u.descuenta_seguridad_social,
+        nombre: formEdicion.nombre,
+        nit: formEdicion.nit,
+        descuenta_seguridad_social: formEdicion.descuenta,
       });
+      setEditandoId(null);
       await alCambiar();
     } catch (err) {
       setError((err as Error).message);
@@ -88,25 +98,51 @@ function SeccionUnidades({ unidades, alCambiar, setError }: Props & { unidades: 
       </form>
       <table className="datos">
         <thead>
-          <tr><th>Nombre</th><th>NIT</th><th>Descuenta seg. social</th></tr>
+          <tr><th>Nombre</th><th>NIT</th><th>Descuenta seg. social</th><th></th></tr>
         </thead>
         <tbody>
-          {unidades.map((u) => (
-            <tr key={u.id}>
-              <td>{u.nombre}</td>
-              <td>{u.nit}</td>
-              <td>
-                <label className="casilla">
+          {unidades.map((u) =>
+            editandoId === u.id ? (
+              <tr key={u.id}>
+                <td>
                   <input
-                    type="checkbox"
-                    checked={u.descuenta_seguridad_social}
-                    onChange={() => alternarDescuento(u)}
+                    required
+                    value={formEdicion.nombre}
+                    onChange={(e) => setFormEdicion({ ...formEdicion, nombre: e.target.value })}
                   />
-                  {u.descuenta_seguridad_social ? "Sí" : "No"}
-                </label>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td>
+                  <input
+                    value={formEdicion.nit}
+                    onChange={(e) => setFormEdicion({ ...formEdicion, nit: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <label className="casilla">
+                    <input
+                      type="checkbox"
+                      checked={formEdicion.descuenta}
+                      onChange={(e) => setFormEdicion({ ...formEdicion, descuenta: e.target.checked })}
+                    />
+                    {formEdicion.descuenta ? "Sí" : "No"}
+                  </label>
+                </td>
+                <td>
+                  <button className="principal" onClick={() => guardarEdicion(u)}>Guardar</button>{" "}
+                  <button className="secundario" onClick={() => setEditandoId(null)}>Cancelar</button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={u.id}>
+                <td>{u.nombre}</td>
+                <td>{u.nit}</td>
+                <td>{u.descuenta_seguridad_social ? "Sí" : "No"}</td>
+                <td>
+                  <button className="secundario" onClick={() => iniciarEdicion(u)}>Editar</button>
+                </td>
+              </tr>
+            )
+          )}
         </tbody>
       </table>
     </div>
@@ -415,6 +451,10 @@ function SeccionEmpleados({
   const [unidadId, setUnidadId] = useState("");
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [form, setForm] = useState({ nombre: "", documento: "", cargo: "", salario: "" });
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [formEdicion, setFormEdicion] = useState({
+    nombre: "", documento: "", cargo: "", salario: "", activo: true,
+  });
 
   async function recargar(unidad: string) {
     if (!unidad) return setEmpleados([]);
@@ -443,13 +483,41 @@ function SeccionEmpleados({
     }
   }
 
+  function iniciarEdicion(emp: Empleado) {
+    setEditandoId(emp.id);
+    setFormEdicion({
+      nombre: emp.nombre,
+      documento: emp.documento,
+      cargo: emp.cargo,
+      salario: String(emp.salario_base),
+      activo: emp.activo,
+    });
+  }
+
+  async function guardarEdicion(emp: Empleado) {
+    setError("");
+    try {
+      await api.empleados.actualizar(emp.id, {
+        nombre: formEdicion.nombre,
+        documento: formEdicion.documento,
+        cargo: formEdicion.cargo,
+        salario_base: Number(formEdicion.salario),
+        activo: formEdicion.activo,
+      });
+      setEditandoId(null);
+      await recargar(unidadId);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div className="tarjeta">
       <h2>Empleados</h2>
       <div className="fila">
         <label className="campo">
           Unidad
-          <select value={unidadId} onChange={(e) => setUnidadId(e.target.value)}>
+          <select value={unidadId} onChange={(e) => { setUnidadId(e.target.value); setEditandoId(null); }}>
             <option value="">— seleccione —</option>
             {unidades.map((u) => (
               <option key={u.id} value={u.id}>{u.nombre}</option>
@@ -501,18 +569,71 @@ function SeccionEmpleados({
             <thead>
               <tr>
                 <th>Nombre</th><th>Documento</th><th>Cargo</th>
-                <th className="numero">Salario</th>
+                <th className="numero">Salario</th><th>Activo</th><th></th>
               </tr>
             </thead>
             <tbody>
-              {empleados.map((emp) => (
-                <tr key={emp.id}>
-                  <td>{emp.nombre}</td>
-                  <td>{emp.documento}</td>
-                  <td>{emp.cargo}</td>
-                  <td className="numero">$ {pesos.format(emp.salario_base)}</td>
-                </tr>
-              ))}
+              {empleados.map((emp) =>
+                editandoId === emp.id ? (
+                  <tr key={emp.id}>
+                    <td>
+                      <input
+                        required
+                        value={formEdicion.nombre}
+                        onChange={(e) => setFormEdicion({ ...formEdicion, nombre: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        required
+                        value={formEdicion.documento}
+                        onChange={(e) => setFormEdicion({ ...formEdicion, documento: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        required
+                        value={formEdicion.cargo}
+                        onChange={(e) => setFormEdicion({ ...formEdicion, cargo: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        required
+                        type="number"
+                        min={1}
+                        value={formEdicion.salario}
+                        onChange={(e) => setFormEdicion({ ...formEdicion, salario: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <label className="casilla">
+                        <input
+                          type="checkbox"
+                          checked={formEdicion.activo}
+                          onChange={(e) => setFormEdicion({ ...formEdicion, activo: e.target.checked })}
+                        />
+                        {formEdicion.activo ? "Sí" : "No"}
+                      </label>
+                    </td>
+                    <td>
+                      <button className="principal" onClick={() => guardarEdicion(emp)}>Guardar</button>{" "}
+                      <button className="secundario" onClick={() => setEditandoId(null)}>Cancelar</button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={emp.id}>
+                    <td>{emp.nombre}</td>
+                    <td>{emp.documento}</td>
+                    <td>{emp.cargo}</td>
+                    <td className="numero">$ {pesos.format(emp.salario_base)}</td>
+                    <td>{emp.activo ? "Sí" : "No"}</td>
+                    <td>
+                      <button className="secundario" onClick={() => iniciarEdicion(emp)}>Editar</button>
+                    </td>
+                  </tr>
+                )
+              )}
             </tbody>
           </table>
         </>
@@ -523,6 +644,8 @@ function SeccionEmpleados({
 
 function SeccionPeriodos({ periodos, alCambiar, setError }: Props & { periodos: Periodo[] }) {
   const [form, setForm] = useState({ fecha_inicio: "", fecha_fin: "" });
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [formEdicion, setFormEdicion] = useState({ fecha_inicio: "", fecha_fin: "" });
 
   async function crear(e: React.FormEvent) {
     e.preventDefault();
@@ -530,6 +653,25 @@ function SeccionPeriodos({ periodos, alCambiar, setError }: Props & { periodos: 
     try {
       await api.periodos.crear(form);
       setForm({ fecha_inicio: "", fecha_fin: "" });
+      await alCambiar();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function iniciarEdicion(p: Periodo) {
+    setEditandoId(p.id);
+    setFormEdicion({ fecha_inicio: p.fecha_inicio, fecha_fin: p.fecha_fin });
+  }
+
+  async function guardarEdicion(p: Periodo) {
+    setError("");
+    try {
+      await api.periodos.actualizar(p.id, {
+        fecha_inicio: formEdicion.fecha_inicio,
+        fecha_fin: formEdicion.fecha_fin,
+      });
+      setEditandoId(null);
       await alCambiar();
     } catch (err) {
       setError((err as Error).message);
@@ -590,25 +732,56 @@ function SeccionPeriodos({ periodos, alCambiar, setError }: Props & { periodos: 
           <tr><th>Desde</th><th>Hasta</th><th>Estado</th><th></th></tr>
         </thead>
         <tbody>
-          {periodos.map((p) => (
-            <tr key={p.id}>
-              <td>{p.fecha_inicio}</td>
-              <td>{p.fecha_fin}</td>
-              <td><span className={`insignia ${p.estado}`}>{p.estado}</span></td>
-              <td>
-                {p.estado === "liquidado" && (
-                  <>
-                    <button className="secundario" onClick={() => reabrir(p.id)}>
-                      Reabrir para corregir
-                    </button>{" "}
-                    <button className="secundario" onClick={() => cerrar(p.id)}>
-                      Cerrar definitivamente
+          {periodos.map((p) =>
+            editandoId === p.id ? (
+              <tr key={p.id}>
+                <td>
+                  <input
+                    required
+                    type="date"
+                    value={formEdicion.fecha_inicio}
+                    onChange={(e) => setFormEdicion({ ...formEdicion, fecha_inicio: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    required
+                    type="date"
+                    value={formEdicion.fecha_fin}
+                    onChange={(e) => setFormEdicion({ ...formEdicion, fecha_fin: e.target.value })}
+                  />
+                </td>
+                <td><span className={`insignia ${p.estado}`}>{p.estado}</span></td>
+                <td>
+                  <button className="principal" onClick={() => guardarEdicion(p)}>Guardar</button>{" "}
+                  <button className="secundario" onClick={() => setEditandoId(null)}>Cancelar</button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={p.id}>
+                <td>{p.fecha_inicio}</td>
+                <td>{p.fecha_fin}</td>
+                <td><span className={`insignia ${p.estado}`}>{p.estado}</span></td>
+                <td>
+                  {p.estado === "abierto" && (
+                    <button className="secundario" onClick={() => iniciarEdicion(p)}>
+                      Editar fechas
                     </button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
+                  )}
+                  {p.estado === "liquidado" && (
+                    <>
+                      <button className="secundario" onClick={() => reabrir(p.id)}>
+                        Reabrir para corregir
+                      </button>{" "}
+                      <button className="secundario" onClick={() => cerrar(p.id)}>
+                        Cerrar definitivamente
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            )
+          )}
         </tbody>
       </table>
     </div>

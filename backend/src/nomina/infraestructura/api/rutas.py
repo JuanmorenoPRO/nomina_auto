@@ -156,6 +156,36 @@ def listar_empleados(usuario: UsuarioOperador, session: Sesion, unidad_id: UUID 
     return [traductores.empleado_a_schema(e) for e in empleados]
 
 
+@router.patch("/empleados/{empleado_id}", response_model=schemas.EmpleadoRespuesta)
+def actualizar_empleado(
+    empleado_id: UUID, datos: schemas.EmpleadoActualizar, usuario: UsuarioContadora, session: Sesion
+):
+    from dataclasses import replace
+
+    repo = RepositorioEmpleadosSQL(session)
+    empleado = repo.obtener(empleado_id)
+    if empleado is None:
+        raise HTTPException(404, "No existe el empleado")
+    cambios: dict = {}
+    if datos.nombre is not None:
+        cambios["nombre"] = datos.nombre
+    if datos.tipo_documento is not None:
+        cambios["tipo_documento"] = datos.tipo_documento
+    if datos.documento is not None:
+        cambios["documento"] = datos.documento
+    if datos.cargo is not None:
+        cambios["cargo"] = datos.cargo
+    if datos.salario_base is not None:
+        cambios["salario_base"] = Decimal(datos.salario_base)
+    if datos.activo is not None:
+        cambios["activo"] = datos.activo
+    actualizado = replace(empleado, **cambios)
+    repo.guardar(actualizado)
+    auditar(session, usuario.email, "actualizar", "empleado", str(empleado_id),
+            despues={k: str(v) for k, v in cambios.items()})
+    return traductores.empleado_a_schema(actualizado)
+
+
 # --- Conceptos manuales (devengados/deducciones por empleado y periodo) ---
 
 
@@ -224,6 +254,31 @@ def crear_periodo(datos: schemas.PeriodoCrear, usuario: UsuarioContadora, sessio
 @router.get("/periodos", response_model=list[schemas.PeriodoRespuesta])
 def listar_periodos(usuario: UsuarioOperador, session: Sesion):
     return [traductores.periodo_a_schema(p) for p in RepositorioPeriodosSQL(session).listar()]
+
+
+@router.patch("/periodos/{periodo_id}", response_model=schemas.PeriodoRespuesta)
+def actualizar_periodo(
+    periodo_id: UUID, datos: schemas.PeriodoActualizar, usuario: UsuarioContadora, session: Sesion
+):
+    from dataclasses import replace
+
+    repo = RepositorioPeriodosSQL(session)
+    periodo = repo.obtener(periodo_id)
+    if periodo is None:
+        raise HTTPException(404, "No existe el periodo")
+    if periodo.estado != EstadoPeriodo.ABIERTO:
+        raise HTTPException(409, "Solo se pueden editar periodos en estado abierto")
+    cambios: dict = {}
+    if datos.fecha_inicio is not None:
+        cambios["fecha_inicio"] = datos.fecha_inicio
+    if datos.fecha_fin is not None:
+        cambios["fecha_fin"] = datos.fecha_fin
+    actualizado = replace(periodo, **cambios)
+    repo.guardar(actualizado)
+    auditar(session, usuario.email, "actualizar", "periodo", str(periodo_id),
+            despues={"fecha_inicio": str(actualizado.fecha_inicio),
+                     "fecha_fin": str(actualizado.fecha_fin)})
+    return traductores.periodo_a_schema(actualizado)
 
 
 @router.post("/periodos/{periodo_id}/reabrir", response_model=schemas.PeriodoRespuesta)
