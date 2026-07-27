@@ -9,9 +9,7 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8001", // 8000 suele estar ocupado en esta máquina
-
         changeOrigin: true,
-        rewrite: (ruta) => ruta.replace(/^\/api/, ""),
       },
     },
   },

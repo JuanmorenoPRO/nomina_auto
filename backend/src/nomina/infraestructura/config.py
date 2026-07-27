@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5174"
     duracion_sesion_horas: int = 12
     cookie_segura: bool = False  # True en producción (HTTPS)
+    static_dir: str = ""  # vacío en dev; en prod = /app/frontend/dist
 
 
 @lru_cache

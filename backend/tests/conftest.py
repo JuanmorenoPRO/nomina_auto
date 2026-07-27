@@ -4,6 +4,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+
+
+class ApiTestClient(TestClient):
+    """TestClient que agrega el prefijo /api a todas las rutas relativas."""
+
+    def request(self, method: str, url, **kwargs):  # type: ignore[override]
+        if isinstance(url, str) and url.startswith("/") and not url.startswith("/api"):
+            url = f"/api{url}"
+        return super().request(method, url, **kwargs)
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -61,7 +70,7 @@ def app_prueba(session: Session) -> FastAPI:
 
 
 def _cliente_autenticado(app: FastAPI, rol: Rol) -> TestClient:
-    cliente = TestClient(app)  # sin context manager: no corre el lifespan
+    cliente = ApiTestClient(app)  # sin context manager: no corre el lifespan
     r = cliente.post(
         "/auth/login",
         json={"email": USUARIOS_PRUEBA[rol], "contrasena": CONTRASENA_PRUEBA},
@@ -88,4 +97,4 @@ def client_operador(app_prueba: FastAPI) -> TestClient:
 
 @pytest.fixture
 def client_anonimo(app_prueba: FastAPI) -> TestClient:
-    return TestClient(app_prueba)
+    return ApiTestClient(app_prueba)
