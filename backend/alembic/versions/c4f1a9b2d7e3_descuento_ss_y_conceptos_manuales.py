@@ -26,7 +26,7 @@ def upgrade() -> None:
             "descuenta_seguridad_social",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("0"),
+            server_default=sa.text("false"),
         ),
     )
     op.add_column(
