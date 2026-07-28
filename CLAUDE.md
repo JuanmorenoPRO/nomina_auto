@@ -87,6 +87,7 @@ dominio  ←  aplicacion  ←  infraestructura
 ```bash
 cd backend
 uv sync               # instalar dependencias
+uv run pre-commit install   # activa el hook de git (una sola vez tras clonar)
 uv run pytest         # tests (cobertura mínima 90% en dominio)
 uv run ruff check .
 uv run lint-imports   # verificar regla de capas
