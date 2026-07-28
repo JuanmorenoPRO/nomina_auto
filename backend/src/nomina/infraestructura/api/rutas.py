@@ -29,6 +29,7 @@ from nomina.dominio.entidades.concepto_liquidado import (
     ConceptoManualRegistrado,
 )
 from nomina.dominio.entidades.empleado import Empleado
+from nomina.dominio.entidades.parametro_legal import ConjuntoParametros
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
 from nomina.dominio.servicios.calendario_festivos import festivos_por_ley
@@ -495,11 +496,36 @@ def obtener_liquidacion(liquidacion_id: UUID, usuario: UsuarioContadora, session
 def descargar_liquidacion_excel(
     liquidacion_id: UUID, usuario: UsuarioContadora, session: Sesion
 ) -> Response:
+    liq_repo = RepositorioLiquidacionesSQL(session)
+    liq = liq_repo.obtener(liquidacion_id)
+    if liq is None:
+        raise HTTPException(404, "No existe la liquidación")
+
+    primera_quincena = None
+    tasas_apropiaciones = None
+    if liq.periodo.fecha_inicio.day >= 16:
+        anio = liq.periodo.fecha_inicio.year
+        mes = liq.periodo.fecha_inicio.month
+        candidatas = liq_repo.listar_para_unidad(liq.unidad.id)
+        for candidata in candidatas:
+            if (
+                candidata.periodo.fecha_inicio.day < 16
+                and candidata.periodo.fecha_inicio.year == anio
+                and candidata.periodo.fecha_inicio.month == mes
+            ):
+                primera_quincena = candidata
+                break
+        if primera_quincena is not None:
+            params = ConjuntoParametros(
+                parametros=tuple(RepositorioParametrosSQL(session).listar())
+            )
+            tasas_apropiaciones = params.tasas_apropiaciones(liq.periodo.fecha_inicio)
+
     caso = ExportarLiquidacion(
-        liquidaciones=RepositorioLiquidacionesSQL(session),
+        liquidaciones=liq_repo,
         exportador=exportar_liquidacion_excel,
     )
-    contenido, nombre = caso.ejecutar(liquidacion_id)
+    contenido, nombre = caso.ejecutar(liquidacion_id, primera_quincena, tasas_apropiaciones)
     auditar(session, usuario.email, "exportar", "liquidacion", str(liquidacion_id))
     return Response(
         content=contenido,

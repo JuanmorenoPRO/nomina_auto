@@ -51,6 +51,17 @@ PARAMETROS_SEMILLA: tuple[ParametroLegal, ...] = (
     _p("auxilio_transporte_mensual", "249095", date(2026, 1, 1), None, "planilla contadora 2026"),
     _p("estrategia_clasificacion_extras", "presupuesto_quincenal", date(2000, 1, 1), None,
        "decisión de negocio: método actual de la contadora"),
+    # Tasas para apropiaciones de seguridad social (segunda quincena)
+    _p("aprop_sena", "0.02", date(2000, 1, 1), None, "Ley 21/1982 art. 7"),
+    _p("aprop_icbf", "0.03", date(2000, 1, 1), None, "Ley 89/1988 art. 1"),
+    _p("aprop_caja_compensacion", "0.04", date(2000, 1, 1), None, "Ley 21/1982 art. 7"),
+    _p("aprop_salud_total", "0.125", date(2000, 1, 1), None, "Ley 100/1993 art. 204 (8.5% empleador + 4% empleado)"),
+    _p("aprop_pension_total", "0.16", date(2000, 1, 1), None, "Ley 100/1993 art. 20 (12% empleador + 4% empleado)"),
+    _p("aprop_arl", "0.01044", date(2000, 1, 1), None, "Decreto 1607/2002 (riesgo I)"),
+    _p("aprop_vacaciones", "0.0417", date(2000, 1, 1), None, "CST art. 186 (15 días/año)"),
+    _p("aprop_prima", "0.0833", date(2000, 1, 1), None, "CST art. 306 (1 mes/año)"),
+    _p("aprop_cesantias", "0.0833", date(2000, 1, 1), None, "Ley 50/1990 art. 99"),
+    _p("aprop_intereses_cesantias", "0.12", date(2000, 1, 1), None, "Ley 52/1975 art. 1"),
 )
 
 

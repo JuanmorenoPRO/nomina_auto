@@ -199,7 +199,7 @@ def test_conceptos_fijos_por_unidad_se_aplican_solos(client):
 def test_parametros_y_festivos(client):
     # historial sembrado y filtro por fecha
     todos = client.get("/parametros").json()
-    assert len(todos) == 25
+    assert len(todos) == 35
     vigentes = client.get("/parametros", params={"fecha": "2026-07-13"}).json()
     dominical = next(p for p in vigentes if p["codigo"] == "recargo_dominical_festivo")
     assert dominical["valor"] == "0.90"
