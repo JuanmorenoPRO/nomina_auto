@@ -35,8 +35,12 @@ PARAMETROS_SEMILLA: tuple[ParametroLegal, ...] = (
     _p("jornada_maxima_semanal", "45", date(2024, 7, 15), date(2025, 7, 14), "Ley 2101/2021"),
     _p("jornada_maxima_semanal", "44", date(2025, 7, 15), date(2026, 7, 14), "Ley 2101/2021"),
     _p("jornada_maxima_semanal", "42", date(2026, 7, 15), None, "Ley 2101/2021"),
-    _p("horas_quincena", "110", date(2000, 1, 1), None, "práctica actual (contadora)"),
-    _p("divisor_hora_ordinaria", "220", date(2000, 1, 1), None, "220 h/mes (planilla contadora)"),
+    # Horas ordinarias de la quincena y divisor de mensualización: bajan con la reducción
+    # de la jornada máxima a 42 h/semana (Ley 2101/2021) el 15-jul-2026: 220→210 h/mes.
+    _p("horas_quincena", "110", date(2000, 1, 1), date(2026, 7, 14), "práctica contadora (jornada 44 h)"),
+    _p("horas_quincena", "105", date(2026, 7, 15), None, "práctica contadora (jornada 42 h, Ley 2101/2021)"),
+    _p("divisor_hora_ordinaria", "220", date(2000, 1, 1), date(2026, 7, 14), "220 h/mes (jornada 44 h)"),
+    _p("divisor_hora_ordinaria", "210", date(2026, 7, 15), None, "210 h/mes (jornada 42 h, Ley 2101/2021)"),
     _p("tope_horas_extra_dia", "2", date(2000, 1, 1), None, "Ley 6ª/1981 art. 1"),
     _p("horas_jornada_diaria", "8", date(2000, 1, 1), None, "jornada diaria (umbral estrategia 'diaria')"),
     # Aportes del empleado a seguridad social (se descuentan solo en unidades marcadas)
