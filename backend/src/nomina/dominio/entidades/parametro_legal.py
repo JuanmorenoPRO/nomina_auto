@@ -29,6 +29,17 @@ CODIGOS_PARAMETROS = frozenset({
     "horas_jornada_diaria",
     "aporte_salud_empleado",
     "aporte_pension_empleado",
+    # Tasas de apropiaciones de seguridad social (segunda quincena)
+    "aprop_sena",
+    "aprop_icbf",
+    "aprop_caja_compensacion",
+    "aprop_salud_total",
+    "aprop_pension_total",
+    "aprop_arl",
+    "aprop_vacaciones",
+    "aprop_prima",
+    "aprop_cesantias",
+    "aprop_intereses_cesantias",
 })
 
 
@@ -118,3 +129,13 @@ class ConjuntoParametros:
 
     def aporte_pension_empleado(self, fecha: date) -> Decimal:
         return self.decimal("aporte_pension_empleado", fecha)
+
+    def tasas_apropiaciones(self, fecha: date) -> dict[str, Decimal]:
+        """Tasas vigentes para la hoja de apropiaciones de seguridad social."""
+        codigos = [
+            "aprop_sena", "aprop_icbf", "aprop_caja_compensacion",
+            "aprop_salud_total", "aprop_pension_total", "aprop_arl",
+            "aprop_vacaciones", "aprop_prima", "aprop_cesantias",
+            "aprop_intereses_cesantias",
+        ]
+        return {c: self.decimal(c, fecha) for c in codigos}

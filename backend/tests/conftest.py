@@ -4,15 +4,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-
-
-class ApiTestClient(TestClient):
-    """TestClient que agrega el prefijo /api a todas las rutas relativas."""
-
-    def request(self, method: str, url, **kwargs):  # type: ignore[override]
-        if isinstance(url, str) and url.startswith("/") and not url.startswith("/api"):
-            url = f"/api{url}"
-        return super().request(method, url, **kwargs)
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -22,6 +13,16 @@ from nomina.infraestructura.persistencia.base import Base, fabrica_sesiones, ses
 from nomina.infraestructura.persistencia.modelos import UsuarioModel
 from nomina.infraestructura.persistencia.sembrar import sembrar_parametros
 from nomina.infraestructura.seguridad.contrasenas import hashear
+
+
+class ApiTestClient(TestClient):
+    """TestClient que agrega el prefijo /api a todas las rutas relativas."""
+
+    def request(self, method: str, url, **kwargs):  # type: ignore[override]
+        if isinstance(url, str) and url.startswith("/") and not url.startswith("/api"):
+            url = f"/api{url}"
+        return super().request(method, url, **kwargs)
+
 
 CONTRASENA_PRUEBA = "clave-de-prueba-123"
 # Argon2id es deliberadamente costoso: hashear UNA vez para toda la corrida.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
@@ -14,7 +15,12 @@ from nomina.aplicacion.errores import NoEncontradoError
 
 
 class ExportadorLiquidacion(Protocol):
-    def __call__(self, liquidacion: LiquidacionQuincena) -> bytes: ...
+    def __call__(
+        self,
+        liquidacion: LiquidacionQuincena,
+        primera_quincena: LiquidacionQuincena | None = None,
+        tasas_apropiaciones: dict[str, Decimal] | None = None,
+    ) -> bytes: ...
 
 
 @dataclass(frozen=True)
@@ -22,7 +28,12 @@ class ExportarLiquidacion:
     liquidaciones: RepositorioLiquidaciones
     exportador: ExportadorLiquidacion
 
-    def ejecutar(self, liquidacion_id: UUID) -> tuple[bytes, str]:
+    def ejecutar(
+        self,
+        liquidacion_id: UUID,
+        primera_quincena: LiquidacionQuincena | None = None,
+        tasas_apropiaciones: dict[str, Decimal] | None = None,
+    ) -> tuple[bytes, str]:
         """Devuelve (contenido, nombre de archivo)."""
         liquidacion = self.liquidaciones.obtener(liquidacion_id)
         if liquidacion is None:
@@ -33,4 +44,4 @@ class ExportarLiquidacion:
             f"_{liquidacion.periodo.fecha_fin:%Y-%m-%d}"
             f"_v{liquidacion.version}.xlsx"
         )
-        return self.exportador(liquidacion), nombre
+        return self.exportador(liquidacion, primera_quincena, tasas_apropiaciones), nombre

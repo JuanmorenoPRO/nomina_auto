@@ -1,9 +1,11 @@
 """Exportador de liquidaciones a Excel con el formato de la planilla de la
-contadora: una hoja por empleado con el desglose por concepto, más un resumen."""
+contadora: una hoja por empleado con el desglose por concepto, más un resumen.
+En la segunda quincena se agrega una hoja de APROPIACIONES."""
 
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -20,6 +22,25 @@ _NEGRITA = Font(bold=True)
 _TITULO = Font(bold=True, size=13)
 _PESOS = "#,##0"
 _BORDE_FINO = Border(bottom=Side(style="thin"))
+
+_COLUMNAS_APROP = [
+    ("EMPLEADO", None),
+    ("CON AUXILIO", None),
+    ("SIN AUXILIO", None),
+    ("SENA", "aprop_sena"),
+    ("ICBF", "aprop_icbf"),
+    ("CAJA COMPENSACION", "aprop_caja_compensacion"),
+    ("SALUD", "aprop_salud_total"),
+    ("PENSION", "aprop_pension_total"),
+    ("ARL", "aprop_arl"),
+    ("VACACIONES", "aprop_vacaciones"),
+    ("PRIMA", "aprop_prima"),
+    ("CESANTIAS", "aprop_cesantias"),
+    ("INTERESES", "aprop_intereses_cesantias"),
+]
+
+# Columnas que usan base CON AUXILIO (prima, cesantías); el resto usa SIN AUXILIO.
+_BASE_CON_AUXILIO = {"aprop_prima", "aprop_cesantias"}
 
 
 def _titulo_hoja(nombre: str) -> str:
@@ -137,10 +158,136 @@ def _hoja_resumen(hoja: Worksheet, liq: LiquidacionQuincena) -> None:
     hoja["A1"].alignment = Alignment(horizontal="left")
 
 
-def exportar_liquidacion_excel(liq: LiquidacionQuincena) -> bytes:
+def _auxilio_de(le: LiquidacionEmpleado) -> Decimal:
+    """Valor del auxilio de transporte en la liquidación (0 si no aplica)."""
+    for c in le.liquidacion.conceptos:
+        if c.codigo == "auxilio_transporte":
+            return c.valor
+    return Decimal(0)
+
+
+def _redondear(v: Decimal) -> int:
+    from decimal import ROUND_HALF_UP
+    return int(v.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _hoja_apropiaciones(
+    hoja: Worksheet,
+    segunda: LiquidacionQuincena,
+    primera: LiquidacionQuincena,
+    tasas: dict[str, Decimal],
+) -> None:
+    """Genera la hoja APROPIACIONES sumando las dos quincenas del mes."""
+    hoja["A1"] = "APROPIACIONES SEGURIDAD SOCIAL"
+    hoja["A1"].font = _TITULO
+    hoja["A2"] = (
+        f"{segunda.unidad.nombre}  —  "
+        f"{primera.periodo.fecha_inicio:%d/%m/%Y} al {segunda.periodo.fecha_fin:%d/%m/%Y}"
+    )
+    hoja["A2"].font = _NEGRITA
+
+    # Fila de encabezados (fila 4)
+    fila_enc = 4
+    for col, (nombre, _) in enumerate(_COLUMNAS_APROP, start=1):
+        celda = hoja.cell(row=fila_enc, column=col, value=nombre)
+        celda.font = _NEGRITA
+        celda.border = _BORDE_FINO
+
+    # Fila de factores (fila 5) — columnas D en adelante (índice 4+)
+    fila_factor = 5
+    for col, (_, codigo) in enumerate(_COLUMNAS_APROP, start=1):
+        if codigo:
+            celda = hoja.cell(row=fila_factor, column=col, value=float(tasas[codigo]))
+            celda.number_format = "0.0000"
+
+    # Construir mapa empleado_id → LiquidacionEmpleado para ambas quincenas
+    mapa_primera: dict = {le.empleado.id: le for le in primera.por_empleado}
+    mapa_segunda: dict = {le.empleado.id: le for le in segunda.por_empleado}
+    empleados_ids = list({le.empleado.id for le in segunda.por_empleado} |
+                         {le.empleado.id for le in primera.por_empleado})
+    # Ordenar por nombre
+    empleados_ids.sort(key=lambda eid: (
+        mapa_segunda.get(eid) or mapa_primera.get(eid)
+    ).empleado.nombre)
+
+    fila = 5
+    filas_datos: list[int] = []
+    for emp_id in empleados_ids:
+        le1 = mapa_primera.get(emp_id)
+        le2 = mapa_segunda.get(emp_id)
+        nombre_emp = (le2 or le1).empleado.nombre  # type: ignore[union-attr]
+
+        dev1 = le1.liquidacion.total_devengado if le1 else Decimal(0)
+        dev2 = le2.liquidacion.total_devengado if le2 else Decimal(0)
+        aux1 = _auxilio_de(le1) if le1 else Decimal(0)
+        aux2 = _auxilio_de(le2) if le2 else Decimal(0)
+
+        con_auxilio = dev1 + dev2
+        sin_auxilio = (dev1 - aux1) + (dev2 - aux2)
+
+        fila += 1
+        filas_datos.append(fila)
+        hoja.cell(row=fila, column=1, value=nombre_emp)
+
+        hoja.cell(row=fila, column=2, value=_redondear(con_auxilio)).number_format = _PESOS
+        hoja.cell(row=fila, column=3, value=_redondear(sin_auxilio)).number_format = _PESOS
+
+        cesantias_valor = Decimal(0)
+        for col, (_, codigo) in enumerate(_COLUMNAS_APROP, start=1):
+            if not codigo:
+                continue
+            tasa = tasas[codigo]
+            if codigo == "aprop_intereses_cesantias":
+                valor = cesantias_valor * tasa
+            elif codigo in _BASE_CON_AUXILIO:
+                valor = con_auxilio * tasa
+            else:
+                valor = sin_auxilio * tasa
+
+            if codigo == "aprop_cesantias":
+                cesantias_valor = valor
+
+            hoja.cell(row=fila, column=col, value=_redondear(valor)).number_format = _PESOS
+
+    # Fila de totales
+    fila += 2
+    hoja.cell(row=fila, column=1, value="TOTALES").font = _NEGRITA
+    for col in range(2, len(_COLUMNAS_APROP) + 1):
+        letra = get_column_letter(col)
+        if filas_datos:
+            primera_fila = filas_datos[0]
+            ultima_fila = filas_datos[-1]
+            celda = hoja.cell(
+                row=fila, column=col,
+                value=f"=SUM({letra}{primera_fila}:{letra}{ultima_fila})"
+            )
+        else:
+            celda = hoja.cell(row=fila, column=col, value=0)
+        celda.font = _NEGRITA
+        celda.number_format = _PESOS
+
+    hoja.column_dimensions["A"].width = 36
+    for col in range(2, len(_COLUMNAS_APROP) + 1):
+        hoja.column_dimensions[get_column_letter(col)].width = 16
+
+
+def exportar_liquidacion_excel(
+    liq: LiquidacionQuincena,
+    primera_quincena: LiquidacionQuincena | None = None,
+    tasas_apropiaciones: dict[str, Decimal] | None = None,
+) -> bytes:
     libro = Workbook()
-    resumen = libro.active
-    resumen.title = "RESUMEN"
+
+    # Hoja APROPIACIONES al frente si es segunda quincena con datos completos
+    if primera_quincena is not None and tasas_apropiaciones is not None:
+        aprop = libro.active
+        aprop.title = "APROPIACIONES"
+        _hoja_apropiaciones(aprop, liq, primera_quincena, tasas_apropiaciones)
+        resumen = libro.create_sheet("RESUMEN")
+    else:
+        resumen = libro.active
+        resumen.title = "RESUMEN"
+
     _hoja_resumen(resumen, liq)
     for le in liq.por_empleado:
         hoja = libro.create_sheet(_titulo_hoja(le.empleado.nombre))

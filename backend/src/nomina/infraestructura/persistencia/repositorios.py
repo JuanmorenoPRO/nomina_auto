@@ -435,6 +435,14 @@ class RepositorioLiquidacionesSQL:
             consulta = consulta.where(LiquidacionModel.periodo_id == periodo_id)
         return [self._a_dominio(m) for m in self.session.scalars(consulta)]
 
+    def listar_para_unidad(self, unidad_id: UUID) -> list[LiquidacionQuincena]:
+        consulta = (
+            select(LiquidacionModel)
+            .where(LiquidacionModel.unidad_id == unidad_id)
+            .order_by(LiquidacionModel.version.desc())
+        )
+        return [self._a_dominio(m) for m in self.session.scalars(consulta)]
+
     def ultima_version(self, periodo_id: UUID, unidad_id: UUID) -> int:
         versiones = self.session.scalars(
             select(LiquidacionModel.version)
