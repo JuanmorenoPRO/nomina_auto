@@ -158,7 +158,7 @@ def test_liquidacion_guarda_snapshot_de_parametros(session, contexto):
     modelo = session.get(LiquidacionModel, liquidacion.id)
     codigos = {p["codigo"] for p in modelo.parametros_snapshot}
     assert "recargo_dominical_festivo" in codigos
-    assert len(modelo.parametros_snapshot) == 23
+    assert len(modelo.parametros_snapshot) == 25
 
 
 def test_actualizar_parametro_cierra_vigencia_anterior(session):
