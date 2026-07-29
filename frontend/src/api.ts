@@ -121,6 +121,7 @@ export const api = {
         ocasional: boolean;
       }>,
     ) => pedir<Empleado>(`/empleados/${id}`, { method: "PATCH", body: json(datos) }),
+    eliminar: (id: string) => pedir<void>(`/empleados/${id}`, { method: "DELETE" }),
   },
   periodos: {
     listar: () => pedir<Periodo[]>("/periodos"),

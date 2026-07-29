@@ -145,6 +145,14 @@ class RepositorioEmpleadosSQL:
         m = self.session.get(EmpleadoModel, id)
         return self._a_dominio(m) if m else None
 
+    def eliminar(self, id: UUID) -> bool:
+        m = self.session.get(EmpleadoModel, id)
+        if m is None:
+            return False
+        self.session.delete(m)
+        self.session.flush()
+        return True
+
     def listar(self, unidad_id: UUID | None = None, solo_activos: bool = False) -> list[Empleado]:
         consulta = select(EmpleadoModel).order_by(EmpleadoModel.nombre)
         if unidad_id is not None:

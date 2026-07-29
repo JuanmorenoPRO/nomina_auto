@@ -516,6 +516,21 @@ function SeccionEmpleados({
     }
   }
 
+  async function eliminar(emp: Empleado) {
+    const seguro = window.confirm(
+      `¿Eliminar a ${emp.nombre}? Esta acción no se puede deshacer. Si tiene turnos, ` +
+        "liquidaciones o conceptos registrados, no se podrá eliminar; márquelo como inactivo en su lugar.",
+    );
+    if (!seguro) return;
+    setError("");
+    try {
+      await api.empleados.eliminar(emp.id);
+      await recargar(unidadId);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div className="tarjeta">
       <h2>Empleados</h2>
@@ -661,7 +676,8 @@ function SeccionEmpleados({
                     <td>{emp.incapacitado ? "Sí" : "No"}</td>
                     <td>{emp.ocasional ? "Sí" : "No"}</td>
                     <td>
-                      <button className="secundario" onClick={() => iniciarEdicion(emp)}>Editar</button>
+                      <button className="secundario" onClick={() => iniciarEdicion(emp)}>Editar</button>{" "}
+                      <button className="secundario" onClick={() => eliminar(emp)}>Eliminar</button>
                     </td>
                   </tr>
                 )
