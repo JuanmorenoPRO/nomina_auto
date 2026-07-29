@@ -153,7 +153,14 @@ def liquidar(
     if quincena_completa:
         minutos_quincena = minutos_quincena_legal
     else:
-        minutos_trabajados = sum(t.minutos for t in tramos_clasificados if not t.es_extra)
+        # Solo tramos de día ORDINARIO: un tramo festivo/dominical ya se paga
+        # completo por su cuenta (su factor incluye `hora_base`, "el descanso ya
+        # estaba remunerado; trabajarlo se paga de nuevo") — contarlo aquí también
+        # sería pagar esas horas dos veces.
+        minutos_trabajados = sum(
+            t.minutos for t in tramos_clasificados
+            if not t.es_extra and t.tipo_dia is TipoDia.ORDINARIO
+        )
         minutos_quincena = min(minutos_trabajados, minutos_quincena_legal)
     conceptos.append(
         ConceptoLiquidado(

@@ -198,6 +198,25 @@ def test_quincena_incompleta_paga_solo_horas_trabajadas():
     assert valor(incompleta, "tiempo_ordinario") == Decimal(80_000)  # 8 h × 10.000
 
 
+def test_quincena_incompleta_no_cuenta_dos_veces_las_horas_festivas():
+    """Un tramo festivo/dominical ya se paga completo por su cuenta (su factor
+    incluye `hora_base`): con quincena incompleta, esas horas NO deben sumar
+    también al balde de tiempo_ordinario, o se pagarían dos veces."""
+    turnos = [
+        turno("2026-03-02", "06:00", "14:00"),  # lunes, 8 h diurnas ordinarias
+        turno("2026-03-08", "06:00", "14:00"),  # domingo, 8 h dominicales
+    ]
+    tramos = segmentar_turnos(turnos, PARAMETROS, CALENDARIO)
+    clasificados = clasificar_extras(tramos, PARAMETROS, date(2026, 3, 1))
+    liq = liquidar(
+        clasificados, SALARIO, PARAMETROS, date(2026, 3, 1),
+        incluir_auxilio_transporte=False, quincena_completa=False,
+    )
+    assert valor(liq, "tiempo_ordinario") == Decimal(80_000)  # solo el lunes
+    assert valor(liq, "festivo_diurno") == Decimal(144_000)  # 8 h × 1,80
+    assert liq.total_devengado == Decimal(224_000)
+
+
 def test_nocturna_dentro_de_jornada_solo_paga_recargo():
     """La hora nocturna ordinaria ya está cubierta por el salario: paga solo
     el 35% (así lo liquida la contadora: TIEMPO NOCTURNO a tarifa × 0,35)."""
