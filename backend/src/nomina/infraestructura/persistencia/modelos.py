@@ -170,7 +170,7 @@ class AuditoriaModel(Base):
     usuario_email: Mapped[str] = mapped_column(String(200))
     accion: Mapped[str] = mapped_column(String(40))
     entidad: Mapped[str] = mapped_column(String(40))
-    entidad_id: Mapped[str] = mapped_column(String(40), default="")
+    entidad_id: Mapped[str] = mapped_column(String(80), default="")
     antes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     despues: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_ahora_utc)
