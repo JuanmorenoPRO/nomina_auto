@@ -108,7 +108,7 @@ def test_liquidar_quincena_caso_contadora_via_bd(session, contexto):
     assert recuperada.por_empleado[0].liquidacion.conceptos == por_empleado.liquidacion.conceptos
 
 
-def test_reliquidar_crea_nueva_version_y_no_sobrescribe(session, contexto):
+def test_reliquidar_reemplaza_y_solo_conserva_la_ultima(session, contexto):
     unidad, empleado, periodo = contexto
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))
     primera = _liquidar(session).ejecutar(periodo.id, unidad.id)
@@ -118,10 +118,11 @@ def test_reliquidar_crea_nueva_version_y_no_sobrescribe(session, contexto):
 
     segunda = _liquidar(session).ejecutar(periodo.id, unidad.id)
     assert segunda.version == 2
-    # ambas versiones siguen consultables
+    # solo se conserva la última: la anterior fue eliminada
     repo = RepositorioLiquidacionesSQL(session)
-    assert {liq.version for liq in repo.listar(periodo_id=periodo.id)} == {1, 2}
-    assert repo.obtener(primera.id) is not None
+    liquidaciones = repo.listar(periodo_id=periodo.id)
+    assert [liq.version for liq in liquidaciones] == [2]
+    assert repo.obtener(primera.id) is None
 
 
 def _marcar(session) -> MarcarPeriodoLiquidado:

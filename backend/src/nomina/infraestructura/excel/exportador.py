@@ -69,11 +69,8 @@ def _hoja_empleado(hoja: Worksheet, liq: LiquidacionQuincena, le: LiquidacionEmp
     hoja["A6"] = "SALARIO BÁSICO MENSUAL:"
     hoja["C6"] = int(le.liquidacion.salario_mensual)
     hoja["C6"].number_format = _PESOS
-    hoja["D6"] = "TARIFA HORA:"
-    hoja["E6"] = float(round(le.liquidacion.tarifa_hora, 2))
-    hoja["E6"].number_format = "#,##0.00"
 
-    encabezados = ["CONCEPTO", "HORAS", "FACTOR", "VALOR"]
+    encabezados = ["CONCEPTO", "HORAS", "VALOR"]
     fila = 8
     for col, texto in enumerate(encabezados, start=1):
         celda = hoja.cell(row=fila, column=col, value=texto)
@@ -86,13 +83,11 @@ def _hoja_empleado(hoja: Worksheet, liq: LiquidacionQuincena, le: LiquidacionEmp
         if concepto.minutos:
             celda_horas = hoja.cell(row=fila, column=2, value=float(round(concepto.horas, 2)))
             celda_horas.number_format = "0.00"
-        if concepto.factor is not None:
-            hoja.cell(row=fila, column=3, value=float(concepto.factor)).number_format = "0.00"
-        hoja.cell(row=fila, column=4, value=int(concepto.valor)).number_format = _PESOS
+        hoja.cell(row=fila, column=3, value=int(concepto.valor)).number_format = _PESOS
 
     fila += 2
     hoja.cell(row=fila, column=1, value="TOTAL DEVENGADO").font = _NEGRITA
-    celda_total = hoja.cell(row=fila, column=4, value=int(le.liquidacion.total_devengado))
+    celda_total = hoja.cell(row=fila, column=3, value=int(le.liquidacion.total_devengado))
     celda_total.font = _NEGRITA
     celda_total.number_format = _PESOS
 
@@ -103,18 +98,16 @@ def _hoja_empleado(hoja: Worksheet, liq: LiquidacionQuincena, le: LiquidacionEmp
         for deduccion in le.liquidacion.deducciones:
             fila += 1
             hoja.cell(row=fila, column=1, value=deduccion.nombre)
-            if deduccion.factor is not None:
-                hoja.cell(row=fila, column=3, value=float(deduccion.factor)).number_format = "0.00"
-            hoja.cell(row=fila, column=4, value=int(deduccion.valor)).number_format = _PESOS
+            hoja.cell(row=fila, column=3, value=int(deduccion.valor)).number_format = _PESOS
         fila += 1
         hoja.cell(row=fila, column=1, value="TOTAL DEDUCCIONES").font = _NEGRITA
-        celda_ded = hoja.cell(row=fila, column=4, value=int(le.liquidacion.total_deducciones))
+        celda_ded = hoja.cell(row=fila, column=3, value=int(le.liquidacion.total_deducciones))
         celda_ded.font = _NEGRITA
         celda_ded.number_format = _PESOS
 
     fila += 2
     hoja.cell(row=fila, column=1, value="VALOR A PAGAR").font = _TITULO
-    celda_neto = hoja.cell(row=fila, column=4, value=int(le.liquidacion.neto_a_pagar))
+    celda_neto = hoja.cell(row=fila, column=3, value=int(le.liquidacion.neto_a_pagar))
     celda_neto.font = _TITULO
     celda_neto.number_format = _PESOS
 

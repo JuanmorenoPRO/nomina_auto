@@ -46,7 +46,7 @@ def test_descarga_excel_con_desglose(client):
 
     hoja = libro["FREDY ALONSO HURTADO"]
     filas = {
-        hoja.cell(row=f, column=1).value: hoja.cell(row=f, column=4).value
+        hoja.cell(row=f, column=1).value: hoja.cell(row=f, column=3).value
         for f in range(9, 15)
     }
     assert filas["TIEMPO ORDINARIO"] == 1_100_000

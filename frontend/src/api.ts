@@ -161,6 +161,7 @@ export const api = {
   liquidaciones: {
     listar: (periodoId?: string) =>
       pedir<Liquidacion[]>(`/liquidaciones${periodoId ? `?periodo_id=${periodoId}` : ""}`),
+    eliminar: (id: string) => pedir<void>(`/liquidaciones/${id}`, { method: "DELETE" }),
     urlExcel: (id: string) => `${BASE}/liquidaciones/${id}/excel`,
   },
 };

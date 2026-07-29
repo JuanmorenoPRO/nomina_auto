@@ -65,6 +65,15 @@ button.secundario {
   font-size: 13px;
   cursor: pointer;
 }
+button.peligro {
+  background: white;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
 
 table.datos { border-collapse: collapse; width: 100%; background: white; font-size: 13px; }
 table.datos th, table.datos td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }

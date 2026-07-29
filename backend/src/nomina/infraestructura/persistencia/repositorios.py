@@ -390,6 +390,17 @@ class RepositorioLiquidacionesSQL:
     session: Session
 
     def guardar(self, liquidacion: LiquidacionQuincena, parametros_snapshot: list[dict]) -> None:
+        # Solo se conserva la última liquidación por unidad+periodo: se borran las
+        # anteriores (el cascade all/delete-orphan elimina empleados y conceptos).
+        previas = self.session.scalars(
+            select(LiquidacionModel)
+            .where(LiquidacionModel.periodo_id == liquidacion.periodo.id)
+            .where(LiquidacionModel.unidad_id == liquidacion.unidad.id)
+        ).all()
+        for previa in previas:
+            self.session.delete(previa)
+        self.session.flush()
+
         modelo = LiquidacionModel(
             id=liquidacion.id,
             periodo_id=liquidacion.periodo.id,
@@ -428,6 +439,14 @@ class RepositorioLiquidacionesSQL:
     def obtener(self, id: UUID) -> LiquidacionQuincena | None:
         m = self.session.get(LiquidacionModel, id)
         return self._a_dominio(m) if m else None
+
+    def eliminar(self, id: UUID) -> bool:
+        m = self.session.get(LiquidacionModel, id)
+        if m is None:
+            return False
+        self.session.delete(m)
+        self.session.flush()
+        return True
 
     def listar(self, periodo_id: UUID | None = None) -> list[LiquidacionQuincena]:
         consulta = select(LiquidacionModel).order_by(LiquidacionModel.creada_en.desc())

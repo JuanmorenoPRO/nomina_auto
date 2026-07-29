@@ -492,6 +492,18 @@ def obtener_liquidacion(liquidacion_id: UUID, usuario: UsuarioContadora, session
     return traductores.liquidacion_a_schema(liquidacion)
 
 
+@router.delete("/liquidaciones/{liquidacion_id}", status_code=204)
+def eliminar_liquidacion(liquidacion_id: UUID, usuario: UsuarioContadora, session: Sesion):
+    repo = RepositorioLiquidacionesSQL(session)
+    liquidacion = repo.obtener(liquidacion_id)
+    if liquidacion is None or not repo.eliminar(liquidacion_id):
+        raise HTTPException(404, "No existe la liquidación")
+    auditar(session, usuario.email, "eliminar", "liquidacion", str(liquidacion_id),
+            antes={"periodo_id": str(liquidacion.periodo.id),
+                   "unidad_id": str(liquidacion.unidad.id),
+                   "version": liquidacion.version, "total": int(liquidacion.total)})
+
+
 @router.get("/liquidaciones/{liquidacion_id}/excel")
 def descargar_liquidacion_excel(
     liquidacion_id: UUID, usuario: UsuarioContadora, session: Sesion

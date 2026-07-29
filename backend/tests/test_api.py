@@ -54,6 +54,14 @@ def test_flujo_completo_de_liquidacion(client):
     turnos = client.get(f"/periodos/{periodo['id']}/turnos").json()
     assert len(turnos) == 1
 
+    # se puede borrar una liquidación; luego ya no es recuperable
+    r = client.delete(f"/liquidaciones/{liquidacion['id']}")
+    assert r.status_code == 204, r.text
+    assert client.get(f"/liquidaciones/{liquidacion['id']}").status_code == 404
+    assert client.get(f"/liquidaciones?periodo_id={periodo['id']}").json() == []
+    # borrar una liquidación inexistente responde 404
+    assert client.delete(f"/liquidaciones/{liquidacion['id']}").status_code == 404
+
 
 def test_validaciones_de_turnos(client):
     unidad = client.post("/unidades", json={"nombre": "Unidad B"}).json()

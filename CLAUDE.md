@@ -42,8 +42,10 @@ dominio  ←  aplicacion  ←  infraestructura
   infraestructura técnica en inglés donde sea idiomático.
 - **IDs:** UUID, nunca secuenciales expuestos.
 - **Seguridad:** sin credenciales en código ni en el repo (`.env` está en `.gitignore`);
-  permisos verificados en backend; auditoría append-only; liquidaciones cerradas son de
-  solo lectura — las correcciones crean una nueva versión.
+  permisos verificados en backend; auditoría append-only; una quincena cerrada es de
+  solo lectura (no se puede reliquidar). Mientras el periodo está abierto, reliquidar una
+  unidad **reemplaza** su liquidación anterior: solo se conserva la última (el cambio queda
+  registrado en la auditoría append-only).
 
 ## Motor de cálculo (resumen)
 
@@ -79,7 +81,8 @@ dominio  ←  aplicacion  ←  infraestructura
 - **Vigencia:** rango de fechas `[vigente_desde, vigente_hasta]` en que un valor de
   parámetro legal aplica. Las vigencias de un mismo parámetro no se solapan.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
-- **Cierre:** paso a solo lectura de una liquidación aprobada; corregir = nueva versión.
+- **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
+  Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).
 - **Festivo trasladado:** festivo movido a lunes por Ley Emiliani (51 de 1983).
 
 ## Comandos

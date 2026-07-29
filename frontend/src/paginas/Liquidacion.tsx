@@ -15,6 +15,7 @@ export function PaginaLiquidacion({
 }) {
   const [unidadId, setUnidadId] = useState("");
   const [periodoId, setPeriodoId] = useState("");
+  const [filtroUnidadId, setFiltroUnidadId] = useState("");
   const [historial, setHistorial] = useState<Liquidacion[]>([]);
   const [detalle, setDetalle] = useState<Liquidacion | null>(null);
   const [error, setError] = useState("");
@@ -34,6 +35,16 @@ export function PaginaLiquidacion({
   }, [recargarHistorial]);
 
   async function liquidar() {
+    const yaExiste = historial.some((liq) => liq.unidad.id === unidadId);
+    if (
+      yaExiste &&
+      !window.confirm(
+        "Ya existe una liquidación para esta unidad en esta quincena. Al continuar se " +
+          "eliminará y se reemplazará por la nueva. ¿Continuar?",
+      )
+    ) {
+      return;
+    }
     setError("");
     setLiquidando(true);
     try {
@@ -44,6 +55,24 @@ export function PaginaLiquidacion({
       setError((e as Error).message);
     } finally {
       setLiquidando(false);
+    }
+  }
+
+  async function eliminarLiquidacion(liq: Liquidacion) {
+    if (
+      !window.confirm(
+        `¿Eliminar la liquidación de ${liq.unidad.nombre}? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return;
+    }
+    setError("");
+    try {
+      await api.liquidaciones.eliminar(liq.id);
+      if (detalle?.id === liq.id) setDetalle(null);
+      await recargarHistorial();
+    } catch (e) {
+      setError((e as Error).message);
     }
   }
 
@@ -94,8 +123,8 @@ export function PaginaLiquidacion({
       </div>
       <p className="pista">
         Liquidar una unidad no cierra la quincena: puede liquidar varias unidades del
-        mismo periodo sin reabrirlo. Reliquidar crea una nueva versión; las anteriores no
-        se modifican.
+        mismo periodo sin reabrirlo. Reliquidar reemplaza la liquidación anterior de esa
+        unidad; solo se conserva la última.
       </p>
 
       {error && <div className="error">{error}</div>}
@@ -103,6 +132,18 @@ export function PaginaLiquidacion({
       {historial.length > 0 && (
         <div className="tarjeta">
           <h3>Liquidaciones del periodo</h3>
+          <label className="campo">
+            Filtrar por unidad
+            <select
+              value={filtroUnidadId}
+              onChange={(e) => setFiltroUnidadId(e.target.value)}
+            >
+              <option value="">Todas las unidades</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>{u.nombre}</option>
+              ))}
+            </select>
+          </label>
           <table className="datos">
             <thead>
               <tr>
@@ -114,7 +155,9 @@ export function PaginaLiquidacion({
               </tr>
             </thead>
             <tbody>
-              {historial.map((liq) => (
+              {historial
+                .filter((liq) => !filtroUnidadId || liq.unidad.id === filtroUnidadId)
+                .map((liq) => (
                 <tr key={liq.id}>
                   <td>{liq.unidad.nombre}</td>
                   <td>v{liq.version}</td>
@@ -126,7 +169,10 @@ export function PaginaLiquidacion({
                     </button>{" "}
                     <a className="principal" href={api.liquidaciones.urlExcel(liq.id)}>
                       Excel
-                    </a>
+                    </a>{" "}
+                    <button className="peligro" onClick={() => eliminarLiquidacion(liq)}>
+                      Borrar
+                    </button>
                   </td>
                 </tr>
               ))}
