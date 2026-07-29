@@ -60,6 +60,13 @@ export interface Empleado {
   cargo: string;
   salario_base: number;
   activo: boolean;
+  incapacitado: boolean;
+}
+
+export interface AjusteQuincena {
+  empleado_id: string;
+  periodo_id: string;
+  quincena_incompleta: boolean;
 }
 
 export interface Periodo {

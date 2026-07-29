@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Empleado, Periodo, Turno, Unidad } from "../tipos";
 import { DIAS_SEMANA, fechaLocal, minutosDeTurno, normalizarHora } from "../turnos-util";
@@ -17,6 +17,9 @@ function paresIniciales(dias: string[], turnos: Turno[]): Record<string, Par[]> 
       fin: normalizarHora(t.hora_fin) ?? t.hora_fin,
     });
   }
+  // Cada día arranca con al menos una fila editable (como la celda de la grilla):
+  // se escribe la hora directamente y, si se deja vacía, es un día de descanso.
+  for (const d of dias) if (mapa[d].length === 0) mapa[d].push({ inicio: "", fin: "" });
   return mapa;
 }
 
@@ -51,6 +54,28 @@ export function PreviaTurnosEmpleado({
   );
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [quincenaIncompleta, setQuincenaIncompleta] = useState(false);
+  const [guardandoIncompleta, setGuardandoIncompleta] = useState(false);
+
+  useEffect(() => {
+    api.ajustesQuincena
+      .obtener(empleado.id, periodo.id)
+      .then((a) => setQuincenaIncompleta(a.quincena_incompleta))
+      .catch((e) => setError(e.message));
+  }, [empleado.id, periodo.id]);
+
+  async function marcarQuincenaIncompleta(valor: boolean) {
+    setError("");
+    setGuardandoIncompleta(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, valor);
+      setQuincenaIncompleta(valor);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoIncompleta(false);
+    }
+  }
 
   function editar(dia: string, idx: number, campo: keyof Par, valor: string) {
     setPares((prev) => {
@@ -64,7 +89,11 @@ export function PreviaTurnosEmpleado({
   }
 
   function quitarPar(dia: string, idx: number) {
-    setPares((prev) => ({ ...prev, [dia]: prev[dia].filter((_, i) => i !== idx) }));
+    setPares((prev) => {
+      const restantes = prev[dia].filter((_, i) => i !== idx);
+      // Siempre queda al menos una fila editable (vacía = descanso).
+      return { ...prev, [dia]: restantes.length ? restantes : [{ inicio: "", fin: "" }] };
+    });
   }
 
   /** Minutos de un día usando solo los pares con horas válidas. */
@@ -226,14 +255,16 @@ export function PreviaTurnosEmpleado({
                                 placeholder="hh"
                                 onChange={(e) => editar(d, i, "fin", e.target.value)}
                               />
-                              <button
-                                type="button"
-                                title="Quitar turno"
-                                className="quitar-par"
-                                onClick={() => quitarPar(d, i)}
-                              >
-                                ×
-                              </button>
+                              {filaPares.length > 1 && (
+                                <button
+                                  type="button"
+                                  title="Quitar turno"
+                                  className="quitar-par"
+                                  onClick={() => quitarPar(d, i)}
+                                >
+                                  ×
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -269,6 +300,17 @@ export function PreviaTurnosEmpleado({
           </table>
         </div>
 
+        <div className="fila" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <label className="casilla">
+            <input
+              type="checkbox"
+              checked={quincenaIncompleta}
+              disabled={soloLectura || guardandoIncompleta}
+              onChange={(e) => marcarQuincenaIncompleta(e.target.checked)}
+            />
+            No laboró todas las horas de la quincena (liquidar sobre lo trabajado)
+          </label>
+        </div>
         <div className="fila" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="secundario" onClick={alCerrar}>
             {soloLectura ? "Cerrar" : "Cancelar"}

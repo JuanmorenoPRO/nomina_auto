@@ -453,7 +453,7 @@ function SeccionEmpleados({
   const [form, setForm] = useState({ nombre: "", documento: "", cargo: "", salario: "" });
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [formEdicion, setFormEdicion] = useState({
-    nombre: "", documento: "", cargo: "", salario: "", activo: true,
+    nombre: "", documento: "", cargo: "", salario: "", activo: true, incapacitado: false,
   });
 
   async function recargar(unidad: string) {
@@ -491,6 +491,7 @@ function SeccionEmpleados({
       cargo: emp.cargo,
       salario: String(emp.salario_base),
       activo: emp.activo,
+      incapacitado: emp.incapacitado,
     });
   }
 
@@ -503,6 +504,7 @@ function SeccionEmpleados({
         cargo: formEdicion.cargo,
         salario_base: Number(formEdicion.salario),
         activo: formEdicion.activo,
+        incapacitado: formEdicion.incapacitado,
       });
       setEditandoId(null);
       await recargar(unidadId);
@@ -569,7 +571,7 @@ function SeccionEmpleados({
             <thead>
               <tr>
                 <th>Nombre</th><th>Documento</th><th>Cargo</th>
-                <th className="numero">Salario</th><th>Activo</th><th></th>
+                <th className="numero">Salario</th><th>Activo</th><th>Incapacitado</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -617,6 +619,18 @@ function SeccionEmpleados({
                       </label>
                     </td>
                     <td>
+                      <label className="casilla">
+                        <input
+                          type="checkbox"
+                          checked={formEdicion.incapacitado}
+                          onChange={(e) =>
+                            setFormEdicion({ ...formEdicion, incapacitado: e.target.checked })
+                          }
+                        />
+                        {formEdicion.incapacitado ? "Sí" : "No"}
+                      </label>
+                    </td>
+                    <td>
                       <button className="principal" onClick={() => guardarEdicion(emp)}>Guardar</button>{" "}
                       <button className="secundario" onClick={() => setEditandoId(null)}>Cancelar</button>
                     </td>
@@ -628,6 +642,7 @@ function SeccionEmpleados({
                     <td>{emp.cargo}</td>
                     <td className="numero">$ {pesos.format(emp.salario_base)}</td>
                     <td>{emp.activo ? "Sí" : "No"}</td>
+                    <td>{emp.incapacitado ? "Sí" : "No"}</td>
                     <td>
                       <button className="secundario" onClick={() => iniciarEdicion(emp)}>Editar</button>
                     </td>

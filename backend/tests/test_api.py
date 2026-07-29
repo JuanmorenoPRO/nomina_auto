@@ -63,6 +63,63 @@ def test_flujo_completo_de_liquidacion(client):
     assert client.delete(f"/liquidaciones/{liquidacion['id']}").status_code == 404
 
 
+def test_incapacitado_sin_auxilio_y_quincena_incompleta_por_horas_trabajadas(client):
+    unidad = client.post("/unidades", json={"nombre": "Edificio Incapacidad P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "JUAN INCAPACITADO",
+            "documento": "71712120",
+            "cargo": "vigilante",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    assert empleado["incapacitado"] is False
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-08-01", "fecha_fin": "2026-08-15"}
+    ).json()
+    client.post(
+        "/turnos",
+        json={
+            "empleado_id": empleado["id"],
+            "fecha": "2026-08-03",
+            "hora_inicio": "06:00",
+            "hora_fin": "14:00",
+        },
+    )
+
+    # Sin marcar nada: comportamiento actual (auxilio incluido, ordinario al tope legal).
+    r = client.get("/ajustes-quincena", params={"empleado_id": empleado["id"], "periodo_id": periodo["id"]})
+    assert r.status_code == 200
+    assert r.json()["quincena_incompleta"] is False
+
+    liq = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    conceptos = {c["codigo"]: c for c in liq["empleados"][0]["conceptos"]}
+    assert "auxilio_transporte" in conceptos
+    assert conceptos["tiempo_ordinario"]["valor"] == 1_100_000  # 110 h × 10.000 (tope legal)
+
+    # Se marca incapacitado + quincena incompleta.
+    r = client.patch(f"/empleados/{empleado['id']}", json={"incapacitado": True})
+    assert r.status_code == 200
+    assert r.json()["incapacitado"] is True
+
+    r = client.put(
+        "/ajustes-quincena",
+        params={"empleado_id": empleado["id"], "periodo_id": periodo["id"]},
+        json={"quincena_incompleta": True},
+    )
+    assert r.status_code == 200
+    assert r.json()["quincena_incompleta"] is True
+
+    liq2 = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    assert liq2["version"] == 2
+    conceptos2 = {c["codigo"]: c for c in liq2["empleados"][0]["conceptos"]}
+    assert "auxilio_transporte" not in conceptos2
+    # divisor vigente en ago-2026 es 210 (post 15-jul-2026): 2.200.000/210 × 8 h
+    assert conceptos2["tiempo_ordinario"]["valor"] == 83_810
+
+
 def test_validaciones_de_turnos(client):
     unidad = client.post("/unidades", json={"nombre": "Unidad B"}).json()
     empleado = client.post(

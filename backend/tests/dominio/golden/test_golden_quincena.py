@@ -176,6 +176,28 @@ def test_auxilio_de_transporte_quincenal():
     assert valor(liq, "auxilio_transporte") == Decimal(124_548)
 
 
+def test_quincena_incompleta_paga_solo_horas_trabajadas():
+    """Marcado a mano que el empleado no laboró toda la quincena (incapacidad,
+    ausencia, ingreso/retiro a mitad de periodo): las ordinarias se pagan sobre
+    lo trabajado, no sobre el tope legal. Sin la marca, el comportamiento no
+    cambia (así lo calibran los golden tests de Puebla)."""
+    turnos = [turno("2026-03-02", "06:00", "14:00")]  # 8 h diurnas ordinarias
+    tramos = segmentar_turnos(turnos, PARAMETROS, CALENDARIO)
+    clasificados = clasificar_extras(tramos, PARAMETROS, date(2026, 3, 1))
+
+    completa = liquidar(
+        clasificados, SALARIO, PARAMETROS, date(2026, 3, 1),
+        incluir_auxilio_transporte=False,
+    )
+    assert valor(completa, "tiempo_ordinario") == BASE_QUINCENA
+
+    incompleta = liquidar(
+        clasificados, SALARIO, PARAMETROS, date(2026, 3, 1),
+        incluir_auxilio_transporte=False, quincena_completa=False,
+    )
+    assert valor(incompleta, "tiempo_ordinario") == Decimal(80_000)  # 8 h × 10.000
+
+
 def test_nocturna_dentro_de_jornada_solo_paga_recargo():
     """La hora nocturna ordinaria ya está cubierta por el salario: paga solo
     el 35% (así lo liquida la contadora: TIEMPO NOCTURNO a tarifa × 0,35)."""

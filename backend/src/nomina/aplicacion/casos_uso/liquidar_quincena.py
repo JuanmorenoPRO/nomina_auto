@@ -74,6 +74,14 @@ class RepositorioConceptosManuales(Protocol):
     ) -> list[ConceptoManual]: ...
 
 
+class RepositorioAjustesQuincena(Protocol):
+    """Puerto: si el empleado no laboró todas las horas de la quincena, marcado a
+    mano desde el cuadro de turnos (incapacidad, ausencia, ingreso/retiro a mitad
+    de periodo)."""
+
+    def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
+
+
 @dataclass(frozen=True)
 class LiquidarQuincena:
     periodos: RepositorioPeriodos
@@ -84,6 +92,7 @@ class LiquidarQuincena:
     festivos: RepositorioFestivos
     liquidaciones: RepositorioLiquidaciones
     conceptos_manuales: RepositorioConceptosManuales
+    ajustes_quincena: RepositorioAjustesQuincena
 
     def ejecutar(self, periodo_id: UUID, unidad_id: UUID) -> LiquidacionQuincena:
         periodo = self.periodos.obtener(periodo_id)
@@ -117,14 +126,17 @@ class LiquidarQuincena:
             manuales = unidad.config.conceptos_fijos + tuple(
                 self.conceptos_manuales.de_empleado_en_periodo(empleado.id, periodo_id)
             )
+            incompleta = self.ajustes_quincena.quincena_incompleta(empleado.id, periodo_id)
             resultado = liquidar(
                 clasificados,
                 empleado.salario_base,
                 conjunto,
                 periodo.fecha_inicio,
+                incluir_auxilio_transporte=not empleado.incapacitado,
                 factores_override=unidad.config.factores_override,
                 conceptos_manuales=manuales,
                 descontar_seguridad_social=unidad.descuenta_seguridad_social,
+                quincena_completa=not incompleta,
             )
             por_empleado.append(LiquidacionEmpleado(empleado=empleado, liquidacion=resultado))
 

@@ -1,4 +1,5 @@
 import type {
+  AjusteQuincena,
   ConceptoManual,
   ConfigUnidad,
   Empleado,
@@ -116,6 +117,7 @@ export const api = {
         cargo: string;
         salario_base: number;
         activo: boolean;
+        incapacitado: boolean;
       }>,
     ) => pedir<Empleado>(`/empleados/${id}`, { method: "PATCH", body: json(datos) }),
   },
@@ -145,6 +147,17 @@ export const api = {
       hora_fin: string;
     }) => pedir<Turno>("/turnos", { method: "POST", body: json(datos) }),
     eliminar: (id: string) => pedir<void>(`/turnos/${id}`, { method: "DELETE" }),
+  },
+  ajustesQuincena: {
+    obtener: (empleadoId: string, periodoId: string) =>
+      pedir<AjusteQuincena>(
+        `/ajustes-quincena?empleado_id=${empleadoId}&periodo_id=${periodoId}`,
+      ),
+    marcar: (empleadoId: string, periodoId: string, quincenaIncompleta: boolean) =>
+      pedir<AjusteQuincena>(
+        `/ajustes-quincena?empleado_id=${empleadoId}&periodo_id=${periodoId}`,
+        { method: "PUT", body: json({ quincena_incompleta: quincenaIncompleta }) },
+      ),
   },
   parametros: {
     listar: (fecha?: string) =>

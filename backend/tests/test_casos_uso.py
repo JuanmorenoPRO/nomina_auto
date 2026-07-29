@@ -15,6 +15,7 @@ from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
 from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
 from nomina.infraestructura.persistencia.repositorios import (
+    RepositorioAjustesQuincenaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -65,6 +66,7 @@ def _liquidar(session) -> LiquidarQuincena:
         festivos=RepositorioFestivosSQL(session),
         liquidaciones=RepositorioLiquidacionesSQL(session),
         conceptos_manuales=RepositorioConceptosManualesSQL(session),
+        ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
     )
 
 

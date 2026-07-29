@@ -25,6 +25,15 @@ from nomina.infraestructura.persistencia.repositorios import (
 SALARIO_BASICO = Decimal("1750905")
 CARGO = "empleado"
 
+# Quincena 1-15 jul 2026: mismas planillas legadas que EDIFICIO PUEBLA P.H (factores
+# combinados viejos + umbral por turno continuo). Ver [[unidad-puebla-descuento-ss]].
+ESTRATEGIA_EXTRAS = "jornada"
+FACTORES_OVERRIDE: dict[str, Decimal] = {
+    "extra_diurna_festiva": Decimal("2.0"),
+    "extra_nocturna_festiva": Decimal("2.5"),
+    "festivo_nocturno": Decimal("2.1"),
+}
+
 # (nombre_unidad, nit, [(nombre_empleado, documento), ...])
 UNIDADES: list[tuple[str, str, list[tuple[str, str]]]] = [
     (
@@ -94,7 +103,10 @@ def sembrar_unidades(session: Session) -> tuple[list[str], int]:
             nombre=nombre,
             nit=nit,
             descuenta_seguridad_social=True,
-            config=ConfiguracionUnidad(),
+            config=ConfiguracionUnidad(
+                estrategia_extras=ESTRATEGIA_EXTRAS,
+                factores_override=dict(FACTORES_OVERRIDE),
+            ),
         )
         unidades_repo.guardar(unidad)
 

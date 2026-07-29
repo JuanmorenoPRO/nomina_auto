@@ -111,6 +111,7 @@ def liquidar(
     factores_override: dict[str, Decimal] | None = None,
     conceptos_manuales: tuple[ConceptoManual, ...] = (),
     descontar_seguridad_social: bool = False,
+    quincena_completa: bool = True,
 ) -> Liquidacion:
     """Liquida la quincena de un empleado a partir de sus tramos ya clasificados.
 
@@ -123,6 +124,14 @@ def liquidar(
     agrega devengados/deducciones cargados a mano. Si `descontar_seguridad_social`,
     se generan las deducciones de salud y pensión sobre el IBC (devengados
     salariales, sin auxilio de transporte).
+
+    `quincena_completa` (default `True`): el salario cubre el tope legal completo
+    de horas ordinarias sin importar cuánto sumen los tramos (así lo hace la
+    contadora: el salario es fijo y las estrategias de extras no necesariamente
+    agotan el presupuesto quincenal). Si es `False` — marcado a mano cuando el
+    empleado no laboró toda la quincena (incapacidad, ausencia, ingreso/retiro a
+    mitad de periodo) — las horas ordinarias se pagan sobre lo efectivamente
+    trabajado, topado al legal.
     """
     override = factores_override or {}
     tarifa_hora = salario_mensual / parametros.divisor_hora_ordinaria(fecha_periodo)
@@ -140,7 +149,12 @@ def liquidar(
 
     conceptos: list[ConceptoLiquidado] = []
 
-    minutos_quincena = int(parametros.horas_quincena(fecha_periodo) * MINUTOS_POR_HORA)
+    minutos_quincena_legal = int(parametros.horas_quincena(fecha_periodo) * MINUTOS_POR_HORA)
+    if quincena_completa:
+        minutos_quincena = minutos_quincena_legal
+    else:
+        minutos_trabajados = sum(t.minutos for t in tramos_clasificados if not t.es_extra)
+        minutos_quincena = min(minutos_trabajados, minutos_quincena_legal)
     conceptos.append(
         ConceptoLiquidado(
             codigo="tiempo_ordinario",

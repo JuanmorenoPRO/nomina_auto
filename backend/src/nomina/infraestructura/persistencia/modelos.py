@@ -57,6 +57,8 @@ class EmpleadoModel(Base):
     cargo: Mapped[str] = mapped_column(String(100))
     salario_base: Mapped[int] = mapped_column(BigInteger)  # pesos enteros
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Incapacitado: sin auxilio de transporte en la liquidación mientras esté marcado.
+    incapacitado: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class PeriodoLiquidacionModel(Base):
@@ -208,3 +210,17 @@ class ConceptoManualModel(Base):
     nombre: Mapped[str] = mapped_column(String(100))
     valor: Mapped[int] = mapped_column(BigInteger)  # pesos enteros
     salarial: Mapped[bool] = mapped_column(Boolean, default=False)  # suma al IBC (solo devengados)
+
+
+class AjusteQuincenaModel(Base):
+    """Marca manual (desde el cuadro de turnos): el empleado no laboró todas las
+    horas de la quincena (incapacidad, ausencia, ingreso/retiro a mitad de
+    periodo). Afecta cómo se calculan las horas ordinarias al liquidar."""
+
+    __tablename__ = "ajuste_quincena"
+    __table_args__ = (UniqueConstraint("empleado_id", "periodo_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    empleado_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("empleado.id"), index=True)
+    periodo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("periodo_liquidacion.id"), index=True)
+    quincena_incompleta: Mapped[bool] = mapped_column(Boolean, default=False)

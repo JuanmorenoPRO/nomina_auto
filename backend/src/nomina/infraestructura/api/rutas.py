@@ -37,6 +37,7 @@ from nomina.infraestructura.api import schemas, traductores
 from nomina.infraestructura.excel.exportador import exportar_liquidacion_excel
 from nomina.infraestructura.persistencia.base import sesion
 from nomina.infraestructura.persistencia.repositorios import (
+    RepositorioAjustesQuincenaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -181,6 +182,8 @@ def actualizar_empleado(
         cambios["salario_base"] = Decimal(datos.salario_base)
     if datos.activo is not None:
         cambios["activo"] = datos.activo
+    if datos.incapacitado is not None:
+        cambios["incapacitado"] = datos.incapacitado
     actualizado = replace(empleado, **cambios)
     repo.guardar(actualizado)
     auditar(session, usuario.email, "actualizar", "empleado", str(empleado_id),
@@ -336,6 +339,44 @@ def turnos_del_periodo(
     return resultado
 
 
+@router.get("/ajustes-quincena", response_model=schemas.AjusteQuincenaRespuesta)
+def obtener_ajuste_quincena(
+    empleado_id: UUID, periodo_id: UUID, usuario: UsuarioOperador, session: Sesion
+):
+    """Si el empleado no laboró toda la quincena (marcado desde el cuadro de
+    turnos): las horas ordinarias se liquidan sobre lo trabajado, no sobre el
+    tope legal completo."""
+    incompleta = RepositorioAjustesQuincenaSQL(session).quincena_incompleta(
+        empleado_id, periodo_id
+    )
+    return schemas.AjusteQuincenaRespuesta(
+        empleado_id=empleado_id, periodo_id=periodo_id, quincena_incompleta=incompleta
+    )
+
+
+@router.put("/ajustes-quincena", response_model=schemas.AjusteQuincenaRespuesta)
+def marcar_ajuste_quincena(
+    empleado_id: UUID,
+    periodo_id: UUID,
+    datos: schemas.AjusteQuincenaActualizar,
+    usuario: UsuarioOperador,
+    session: Sesion,
+):
+    if RepositorioEmpleadosSQL(session).obtener(empleado_id) is None:
+        raise HTTPException(404, "No existe el empleado")
+    if RepositorioPeriodosSQL(session).obtener(periodo_id) is None:
+        raise HTTPException(404, "No existe el periodo")
+    RepositorioAjustesQuincenaSQL(session).marcar(
+        empleado_id, periodo_id, datos.quincena_incompleta
+    )
+    auditar(session, usuario.email, "actualizar", "ajuste_quincena", f"{empleado_id}:{periodo_id}",
+            despues={"quincena_incompleta": datos.quincena_incompleta})
+    return schemas.AjusteQuincenaRespuesta(
+        empleado_id=empleado_id, periodo_id=periodo_id,
+        quincena_incompleta=datos.quincena_incompleta,
+    )
+
+
 # --- Turnos ---
 
 
@@ -460,6 +501,7 @@ def _caso_liquidar(session: Session) -> LiquidarQuincena:
         festivos=RepositorioFestivosSQL(session),
         liquidaciones=RepositorioLiquidacionesSQL(session),
         conceptos_manuales=RepositorioConceptosManualesSQL(session),
+        ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
     )
 
 

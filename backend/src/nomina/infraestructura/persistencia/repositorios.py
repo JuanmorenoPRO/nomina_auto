@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,6 +33,7 @@ from nomina.dominio.entidades.turno import Turno, TurnoRegistrado
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
 from nomina.dominio.valores.vigencia import Vigencia
 from nomina.infraestructura.persistencia.modelos import (
+    AjusteQuincenaModel,
     ConceptoLiquidadoModel,
     ConceptoManualModel,
     EmpleadoModel,
@@ -134,6 +135,7 @@ class RepositorioEmpleadosSQL:
                 cargo=empleado.cargo,
                 salario_base=int(empleado.salario_base),
                 activo=empleado.activo,
+                incapacitado=empleado.incapacitado,
             )
         )
         self.session.flush()
@@ -161,6 +163,7 @@ class RepositorioEmpleadosSQL:
             cargo=m.cargo,
             salario_base=Decimal(m.salario_base),
             activo=m.activo,
+            incapacitado=m.incapacitado,
         )
 
 
@@ -383,6 +386,38 @@ class RepositorioConceptosManualesSQL:
                 nombre=m.nombre, valor=Decimal(m.valor), tipo=m.tipo, salarial=m.salarial
             ),
         )
+
+
+@dataclass
+class RepositorioAjustesQuincenaSQL:
+    session: Session
+
+    def _obtener(self, empleado_id: UUID, periodo_id: UUID) -> AjusteQuincenaModel | None:
+        return self.session.scalar(
+            select(AjusteQuincenaModel).where(
+                AjusteQuincenaModel.empleado_id == empleado_id,
+                AjusteQuincenaModel.periodo_id == periodo_id,
+            )
+        )
+
+    def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool:
+        m = self._obtener(empleado_id, periodo_id)
+        return m.quincena_incompleta if m else False
+
+    def marcar(self, empleado_id: UUID, periodo_id: UUID, incompleta: bool) -> None:
+        m = self._obtener(empleado_id, periodo_id)
+        if m is None:
+            self.session.add(
+                AjusteQuincenaModel(
+                    id=uuid4(),
+                    empleado_id=empleado_id,
+                    periodo_id=periodo_id,
+                    quincena_incompleta=incompleta,
+                )
+            )
+        else:
+            m.quincena_incompleta = incompleta
+        self.session.flush()
 
 
 @dataclass

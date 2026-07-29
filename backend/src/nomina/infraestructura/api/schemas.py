@@ -74,6 +74,7 @@ class EmpleadoActualizar(BaseModel):
     cargo: str | None = Field(default=None, min_length=1, max_length=100)
     salario_base: int | None = Field(default=None, gt=0)
     activo: bool | None = None
+    incapacitado: bool | None = None
 
     @field_validator("documento")
     @classmethod
@@ -92,6 +93,7 @@ class EmpleadoRespuesta(BaseModel):
     cargo: str
     salario_base: int
     activo: bool
+    incapacitado: bool
 
 
 class ConceptoManualCrear(BaseModel):
@@ -111,6 +113,16 @@ class ConceptoManualRespuesta(BaseModel):
     nombre: str
     valor: int
     salarial: bool
+
+
+class AjusteQuincenaActualizar(BaseModel):
+    quincena_incompleta: bool
+
+
+class AjusteQuincenaRespuesta(BaseModel):
+    empleado_id: UUID
+    periodo_id: UUID
+    quincena_incompleta: bool
 
 
 class PeriodoCrear(BaseModel):
