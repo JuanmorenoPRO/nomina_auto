@@ -18,6 +18,7 @@ class Empleado:
     tipo_documento: str = "CC"
     activo: bool = True
     incapacitado: bool = False
+    ocasional: bool = False
 
     def __post_init__(self) -> None:
         if not self.nombre.strip():

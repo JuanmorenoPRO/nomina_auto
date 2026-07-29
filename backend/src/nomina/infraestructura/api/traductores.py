@@ -51,6 +51,7 @@ def empleado_a_schema(e: Empleado) -> EmpleadoRespuesta:
         salario_base=int(e.salario_base),
         activo=e.activo,
         incapacitado=e.incapacitado,
+        ocasional=e.ocasional,
     )
 
 

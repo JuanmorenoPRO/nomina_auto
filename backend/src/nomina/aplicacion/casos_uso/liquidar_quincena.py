@@ -132,7 +132,7 @@ class LiquidarQuincena:
                 empleado.salario_base,
                 conjunto,
                 periodo.fecha_inicio,
-                incluir_auxilio_transporte=not empleado.incapacitado,
+                incluir_auxilio_transporte=not (empleado.incapacitado or empleado.ocasional),
                 factores_override=unidad.config.factores_override,
                 conceptos_manuales=manuales,
                 descontar_seguridad_social=unidad.descuenta_seguridad_social,

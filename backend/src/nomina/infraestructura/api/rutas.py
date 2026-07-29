@@ -184,6 +184,8 @@ def actualizar_empleado(
         cambios["activo"] = datos.activo
     if datos.incapacitado is not None:
         cambios["incapacitado"] = datos.incapacitado
+    if datos.ocasional is not None:
+        cambios["ocasional"] = datos.ocasional
     actualizado = replace(empleado, **cambios)
     repo.guardar(actualizado)
     auditar(session, usuario.email, "actualizar", "empleado", str(empleado_id),

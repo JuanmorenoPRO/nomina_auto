@@ -63,6 +63,43 @@ def test_flujo_completo_de_liquidacion(client):
     assert client.delete(f"/liquidaciones/{liquidacion['id']}").status_code == 404
 
 
+def test_ocasional_sin_auxilio_de_transporte(client):
+    unidad = client.post("/unidades", json={"nombre": "Edificio Ocasional P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "ANA OCASIONAL",
+            "documento": "71712121",
+            "cargo": "aseo",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    assert empleado["ocasional"] is False
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-09-01", "fecha_fin": "2026-09-15"}
+    ).json()
+    client.post(
+        "/turnos",
+        json={
+            "empleado_id": empleado["id"],
+            "fecha": "2026-09-03",
+            "hora_inicio": "06:00",
+            "hora_fin": "14:00",
+        },
+    )
+
+    liq = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    assert "auxilio_transporte" in {c["codigo"] for c in liq["empleados"][0]["conceptos"]}
+
+    r = client.patch(f"/empleados/{empleado['id']}", json={"ocasional": True})
+    assert r.status_code == 200
+    assert r.json()["ocasional"] is True
+
+    liq2 = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    assert "auxilio_transporte" not in {c["codigo"] for c in liq2["empleados"][0]["conceptos"]}
+
+
 def test_incapacitado_sin_auxilio_y_quincena_incompleta_por_horas_trabajadas(client):
     unidad = client.post("/unidades", json={"nombre": "Edificio Incapacidad P.H."}).json()
     empleado = client.post(

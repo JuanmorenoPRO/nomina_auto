@@ -75,6 +75,7 @@ class EmpleadoActualizar(BaseModel):
     salario_base: int | None = Field(default=None, gt=0)
     activo: bool | None = None
     incapacitado: bool | None = None
+    ocasional: bool | None = None
 
     @field_validator("documento")
     @classmethod
@@ -94,6 +95,7 @@ class EmpleadoRespuesta(BaseModel):
     salario_base: int
     activo: bool
     incapacitado: bool
+    ocasional: bool
 
 
 class ConceptoManualCrear(BaseModel):

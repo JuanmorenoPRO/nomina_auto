@@ -57,8 +57,9 @@ class EmpleadoModel(Base):
     cargo: Mapped[str] = mapped_column(String(100))
     salario_base: Mapped[int] = mapped_column(BigInteger)  # pesos enteros
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
-    # Incapacitado: sin auxilio de transporte en la liquidación mientras esté marcado.
+    # Incapacitado u ocasional: sin auxilio de transporte en la liquidación.
     incapacitado: Mapped[bool] = mapped_column(Boolean, default=False)
+    ocasional: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class PeriodoLiquidacionModel(Base):

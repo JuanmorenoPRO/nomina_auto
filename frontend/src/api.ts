@@ -118,6 +118,7 @@ export const api = {
         salario_base: number;
         activo: boolean;
         incapacitado: boolean;
+        ocasional: boolean;
       }>,
     ) => pedir<Empleado>(`/empleados/${id}`, { method: "PATCH", body: json(datos) }),
   },

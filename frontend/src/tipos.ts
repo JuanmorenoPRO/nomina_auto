@@ -61,6 +61,7 @@ export interface Empleado {
   salario_base: number;
   activo: boolean;
   incapacitado: boolean;
+  ocasional: boolean;
 }
 
 export interface AjusteQuincena {

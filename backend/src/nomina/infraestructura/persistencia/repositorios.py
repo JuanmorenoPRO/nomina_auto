@@ -136,6 +136,7 @@ class RepositorioEmpleadosSQL:
                 salario_base=int(empleado.salario_base),
                 activo=empleado.activo,
                 incapacitado=empleado.incapacitado,
+                ocasional=empleado.ocasional,
             )
         )
         self.session.flush()
@@ -164,6 +165,7 @@ class RepositorioEmpleadosSQL:
             salario_base=Decimal(m.salario_base),
             activo=m.activo,
             incapacitado=m.incapacitado,
+            ocasional=m.ocasional,
         )
 
 
