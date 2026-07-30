@@ -214,9 +214,17 @@ class ConceptoManualModel(Base):
 
 
 class AjusteQuincenaModel(Base):
-    """Marca manual (desde el cuadro de turnos): el empleado no laboró todas las
-    horas de la quincena (incapacidad, ausencia, ingreso/retiro a mitad de
-    periodo). Afecta cómo se calculan las horas ordinarias al liquidar."""
+    """Marcas manuales (desde el cuadro de turnos) por empleado y periodo que
+    afectan cómo se liquida esa quincena:
+
+    - `quincena_incompleta`: el empleado no laboró todas las horas (incapacidad,
+      ausencia, ingreso/retiro a mitad de periodo) → las horas ordinarias se
+      liquidan sobre lo trabajado, no sobre el tope legal completo.
+    - `sin_extras`: el empleado concentró horas para descansar otros días, pero
+      no superó el presupuesto quincenal → no se le cobran horas extra por turno.
+      Fuerza la estrategia `presupuesto_quincenal` (extra solo sobre el excedente
+      de las horas de la quincena); los recargos nocturno/dominical se mantienen.
+    """
 
     __tablename__ = "ajuste_quincena"
     __table_args__ = (UniqueConstraint("empleado_id", "periodo_id"),)
@@ -225,3 +233,4 @@ class AjusteQuincenaModel(Base):
     empleado_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("empleado.id"), index=True)
     periodo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("periodo_liquidacion.id"), index=True)
     quincena_incompleta: Mapped[bool] = mapped_column(Boolean, default=False)
+    sin_extras: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -366,14 +366,15 @@ def turnos_del_periodo(
 def obtener_ajuste_quincena(
     empleado_id: UUID, periodo_id: UUID, usuario: UsuarioOperador, session: Sesion
 ):
-    """Si el empleado no laboró toda la quincena (marcado desde el cuadro de
-    turnos): las horas ordinarias se liquidan sobre lo trabajado, no sobre el
-    tope legal completo."""
-    incompleta = RepositorioAjustesQuincenaSQL(session).quincena_incompleta(
-        empleado_id, periodo_id
-    )
+    """Marcas del empleado en esta quincena (desde el cuadro de turnos):
+    `quincena_incompleta` (liquidar sobre lo trabajado) y `sin_extras` (no cobrar
+    extra por turno; solo sobre el excedente del presupuesto quincenal)."""
+    repo = RepositorioAjustesQuincenaSQL(session)
     return schemas.AjusteQuincenaRespuesta(
-        empleado_id=empleado_id, periodo_id=periodo_id, quincena_incompleta=incompleta
+        empleado_id=empleado_id,
+        periodo_id=periodo_id,
+        quincena_incompleta=repo.quincena_incompleta(empleado_id, periodo_id),
+        sin_extras=repo.sin_extras(empleado_id, periodo_id),
     )
 
 
@@ -389,14 +390,20 @@ def marcar_ajuste_quincena(
         raise HTTPException(404, "No existe el empleado")
     if RepositorioPeriodosSQL(session).obtener(periodo_id) is None:
         raise HTTPException(404, "No existe el periodo")
-    RepositorioAjustesQuincenaSQL(session).marcar(
-        empleado_id, periodo_id, datos.quincena_incompleta
+    repo = RepositorioAjustesQuincenaSQL(session)
+    repo.marcar(
+        empleado_id,
+        periodo_id,
+        quincena_incompleta=datos.quincena_incompleta,
+        sin_extras=datos.sin_extras,
     )
+    incompleta = repo.quincena_incompleta(empleado_id, periodo_id)
+    sin_extras = repo.sin_extras(empleado_id, periodo_id)
     auditar(session, usuario.email, "actualizar", "ajuste_quincena", f"{empleado_id}:{periodo_id}",
-            despues={"quincena_incompleta": datos.quincena_incompleta})
+            despues={"quincena_incompleta": incompleta, "sin_extras": sin_extras})
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id, periodo_id=periodo_id,
-        quincena_incompleta=datos.quincena_incompleta,
+        quincena_incompleta=incompleta, sin_extras=sin_extras,
     )
 
 

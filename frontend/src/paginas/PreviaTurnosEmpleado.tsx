@@ -56,11 +56,16 @@ export function PreviaTurnosEmpleado({
   const [guardando, setGuardando] = useState(false);
   const [quincenaIncompleta, setQuincenaIncompleta] = useState(false);
   const [guardandoIncompleta, setGuardandoIncompleta] = useState(false);
+  const [sinExtras, setSinExtras] = useState(false);
+  const [guardandoSinExtras, setGuardandoSinExtras] = useState(false);
 
   useEffect(() => {
     api.ajustesQuincena
       .obtener(empleado.id, periodo.id)
-      .then((a) => setQuincenaIncompleta(a.quincena_incompleta))
+      .then((a) => {
+        setQuincenaIncompleta(a.quincena_incompleta);
+        setSinExtras(a.sin_extras);
+      })
       .catch((e) => setError(e.message));
   }, [empleado.id, periodo.id]);
 
@@ -68,12 +73,25 @@ export function PreviaTurnosEmpleado({
     setError("");
     setGuardandoIncompleta(true);
     try {
-      await api.ajustesQuincena.marcar(empleado.id, periodo.id, valor);
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, { quincena_incompleta: valor });
       setQuincenaIncompleta(valor);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setGuardandoIncompleta(false);
+    }
+  }
+
+  async function marcarSinExtras(valor: boolean) {
+    setError("");
+    setGuardandoSinExtras(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, { sin_extras: valor });
+      setSinExtras(valor);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoSinExtras(false);
     }
   }
 
@@ -300,7 +318,7 @@ export function PreviaTurnosEmpleado({
           </table>
         </div>
 
-        <div className="fila" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <div className="fila" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
           <label className="casilla">
             <input
               type="checkbox"
@@ -309,6 +327,16 @@ export function PreviaTurnosEmpleado({
               onChange={(e) => marcarQuincenaIncompleta(e.target.checked)}
             />
             No laboró todas las horas de la quincena (liquidar sobre lo trabajado)
+          </label>
+          <label className="casilla">
+            <input
+              type="checkbox"
+              checked={sinExtras}
+              disabled={soloLectura || guardandoSinExtras}
+              onChange={(e) => marcarSinExtras(e.target.checked)}
+            />
+            No calcular horas extra: solo cobrar extra si supera las horas de la quincena
+            (concentró horas para descansar otros días)
           </label>
         </div>
         <div className="fila" style={{ justifyContent: "flex-end" }}>

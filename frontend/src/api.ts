@@ -155,10 +155,14 @@ export const api = {
       pedir<AjusteQuincena>(
         `/ajustes-quincena?empleado_id=${empleadoId}&periodo_id=${periodoId}`,
       ),
-    marcar: (empleadoId: string, periodoId: string, quincenaIncompleta: boolean) =>
+    marcar: (
+      empleadoId: string,
+      periodoId: string,
+      ajuste: Partial<{ quincena_incompleta: boolean; sin_extras: boolean }>,
+    ) =>
       pedir<AjusteQuincena>(
         `/ajustes-quincena?empleado_id=${empleadoId}&periodo_id=${periodoId}`,
-        { method: "PUT", body: json({ quincena_incompleta: quincenaIncompleta }) },
+        { method: "PUT", body: json(ajuste) },
       ),
   },
   parametros: {
