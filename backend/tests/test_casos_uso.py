@@ -13,7 +13,7 @@ from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
 from nomina.aplicacion.errores import NoEncontradoError, ReglaDeNegocioError
 from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
-from nomina.dominio.entidades.unidad_residencial import UnidadResidencial
+from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
     RepositorioConceptosManualesSQL,
@@ -108,6 +108,39 @@ def test_liquidar_quincena_caso_contadora_via_bd(session, contexto):
     recuperada = RepositorioLiquidacionesSQL(session).obtener(liquidacion.id)
     assert recuperada.total == Decimal(1_479_048)
     assert recuperada.por_empleado[0].liquidacion.conceptos == por_empleado.liquidacion.conceptos
+
+
+def test_sin_extras_fuerza_presupuesto_quincenal(session, contexto):
+    """Empleado que concentra horas para descansar otros días: un día de 12 h en
+    una unidad con estrategia 'diaria' (umbral 8 h) genera extra diurna espuria.
+    Marcado 'sin extras', se liquida por presupuesto quincenal (12 h << 110 h) y
+    no se cobra ninguna extra: solo tiempo ordinario."""
+    _, empleado, periodo = contexto
+    unidad = UnidadResidencial(
+        id=uuid4(),
+        nombre="Edificio Diaria P.H.",
+        nit="900111222",
+        config=ConfiguracionUnidad(estrategia_extras="diaria"),
+    )
+    RepositorioUnidadesSQL(session).guardar(unidad)
+    empleado = Empleado(
+        id=uuid4(), unidad_id=unidad.id, nombre="LUZ PRUEBA", documento="52123456",
+        cargo="aseo", salario_base=Decimal(2_200_000),
+    )
+    RepositorioEmpleadosSQL(session).guardar(empleado)
+    # mié 17-jun, 06:00→18:00 = 12 h diurnas en día ordinario
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(18))
+
+    # sin marcar: la estrategia 'diaria' cobra 4 h de extra diurna
+    sin_marca = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    codigos = {c.codigo for c in sin_marca.por_empleado[0].liquidacion.conceptos}
+    assert "extra_diurna" in codigos
+
+    # marcado 'sin extras': presupuesto quincenal → sin extra alguna
+    RepositorioAjustesQuincenaSQL(session).marcar(empleado.id, periodo.id, sin_extras=True)
+    con_marca = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    conceptos = con_marca.por_empleado[0].liquidacion.conceptos
+    assert not any(c.codigo.startswith("extra") for c in conceptos)
 
 
 def test_reliquidar_reemplaza_y_solo_conserva_la_ultima(session, contexto):

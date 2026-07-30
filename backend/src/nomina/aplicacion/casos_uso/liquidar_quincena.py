@@ -33,7 +33,7 @@ from nomina.dominio.puertos.repositorios import (
 )
 from nomina.dominio.servicios.calculadora import liquidar
 from nomina.dominio.servicios.calendario_festivos import CalendarioFestivos
-from nomina.dominio.servicios.clasificador_extras import clasificar_extras
+from nomina.dominio.servicios.clasificador_extras import PRESUPUESTO_QUINCENAL, clasificar_extras
 from nomina.dominio.servicios.segmentador import segmentar_turnos
 
 
@@ -75,11 +75,16 @@ class RepositorioConceptosManuales(Protocol):
 
 
 class RepositorioAjustesQuincena(Protocol):
-    """Puerto: si el empleado no laboró todas las horas de la quincena, marcado a
-    mano desde el cuadro de turnos (incapacidad, ausencia, ingreso/retiro a mitad
-    de periodo)."""
+    """Puerto: marcas manuales por empleado y periodo desde el cuadro de turnos.
+
+    - `quincena_incompleta`: el empleado no laboró todas las horas (incapacidad,
+      ausencia, ingreso/retiro a mitad de periodo).
+    - `sin_extras`: no calcular horas extra por turno; solo cobrar extra sobre el
+      excedente del presupuesto quincenal (el empleado concentró horas para
+      descansar otros días sin superar el tope de la quincena)."""
 
     def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
+    def sin_extras(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -119,8 +124,15 @@ class LiquidarQuincena:
                 empleado.id, periodo.fecha_inicio, periodo.fecha_fin
             )
             tramos = segmentar_turnos([r.turno for r in registrados], conjunto, calendario)
+            # Si se marcó "sin extras" para este empleado en esta quincena, se
+            # fuerza la clasificación por presupuesto quincenal (extra solo sobre
+            # el excedente del tope legal), ignorando la estrategia de la unidad.
+            sin_extras = self.ajustes_quincena.sin_extras(empleado.id, periodo_id)
+            estrategia = (
+                PRESUPUESTO_QUINCENAL if sin_extras else unidad.config.estrategia_extras
+            )
             clasificados = clasificar_extras(
-                tramos, conjunto, periodo.fecha_inicio, estrategia=unidad.config.estrategia_extras
+                tramos, conjunto, periodo.fecha_inicio, estrategia=estrategia
             )
             # Conceptos fijos de la unidad (ej. cuota de manejo) + manuales del empleado.
             manuales = unidad.config.conceptos_fijos + tuple(

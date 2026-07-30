@@ -118,13 +118,15 @@ class ConceptoManualRespuesta(BaseModel):
 
 
 class AjusteQuincenaActualizar(BaseModel):
-    quincena_incompleta: bool
+    quincena_incompleta: bool | None = None
+    sin_extras: bool | None = None
 
 
 class AjusteQuincenaRespuesta(BaseModel):
     empleado_id: UUID
     periodo_id: UUID
     quincena_incompleta: bool
+    sin_extras: bool
 
 
 class PeriodoCrear(BaseModel):

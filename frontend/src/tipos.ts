@@ -68,6 +68,7 @@ export interface AjusteQuincena {
   empleado_id: string;
   periodo_id: string;
   quincena_incompleta: boolean;
+  sin_extras: boolean;
 }
 
 export interface Periodo {
