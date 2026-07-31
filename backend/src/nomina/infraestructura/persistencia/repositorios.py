@@ -145,6 +145,23 @@ class RepositorioEmpleadosSQL:
         m = self.session.get(EmpleadoModel, id)
         return self._a_dominio(m) if m else None
 
+    def tiene_referencias(self, id: UUID) -> bool:
+        """¿El empleado está referenciado por turnos, conceptos manuales,
+        liquidaciones o ajustes? Comprobación explícita (no depende de que la BD
+        fuerce claves foráneas — SQLite no lo hace por defecto)."""
+        for modelo in (
+            TurnoModel,
+            ConceptoManualModel,
+            LiquidacionEmpleadoModel,
+            AjusteQuincenaModel,
+        ):
+            existe = self.session.scalar(
+                select(modelo.id).where(modelo.empleado_id == id).limit(1)
+            )
+            if existe is not None:
+                return True
+        return False
+
     def eliminar(self, id: UUID) -> bool:
         m = self.session.get(EmpleadoModel, id)
         if m is None:
@@ -533,8 +550,18 @@ class RepositorioLiquidacionesSQL:
         assert periodo is not None and unidad is not None
         por_empleado = []
         for le in m.empleados:
-            empleado = empleados_repo.obtener(le.empleado_id)
-            assert empleado is not None
+            # La liquidación es un registro histórico inmutable: si el empleado fue
+            # eliminado después de liquidar, se reconstruye desde el snapshot
+            # (nombre y salario guardados) en lugar de romper toda la consulta.
+            empleado = empleados_repo.obtener(le.empleado_id) or Empleado(
+                id=le.empleado_id,
+                unidad_id=m.unidad_id,
+                nombre=le.nombre_empleado,
+                documento="—",
+                cargo="—",
+                salario_base=Decimal(le.salario_mensual),
+                activo=False,
+            )
             def _a_concepto(c: ConceptoLiquidadoModel) -> ConceptoLiquidado:
                 return ConceptoLiquidado(
                     codigo=c.codigo,

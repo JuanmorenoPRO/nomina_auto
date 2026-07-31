@@ -63,6 +63,31 @@ def test_flujo_completo_de_liquidacion(client):
     assert client.delete(f"/liquidaciones/{liquidacion['id']}").status_code == 404
 
 
+def test_no_se_puede_eliminar_empleado_con_referencias(client):
+    unidad = client.post("/unidades", json={"nombre": "Edificio Borrar P.H."}).json()
+    base = {"unidad_id": unidad["id"], "cargo": "aseo", "salario_base": 2_200_000}
+
+    # sin referencias: se puede borrar
+    libre = client.post("/empleados", json={**base, "nombre": "SIN REFS", "documento": "111"}).json()
+    assert client.delete(f"/empleados/{libre['id']}").status_code == 204
+
+    # con un turno registrado: se bloquea con 409 (no se silencia el borrado)
+    con_turno = client.post("/empleados", json={**base, "nombre": "CON TURNO", "documento": "222"}).json()
+    client.post(
+        "/periodos", json={"fecha_inicio": "2026-06-16", "fecha_fin": "2026-06-30"}
+    )
+    client.post(
+        "/turnos",
+        json={
+            "empleado_id": con_turno["id"], "fecha": "2026-06-20",
+            "hora_inicio": "06:00", "hora_fin": "14:00",
+        },
+    )
+    r = client.delete(f"/empleados/{con_turno['id']}")
+    assert r.status_code == 409, r.text
+    assert "No se puede eliminar" in r.json()["detail"]
+
+
 def test_ocasional_sin_auxilio_de_transporte(client):
     unidad = client.post("/unidades", json={"nombre": "Edificio Ocasional P.H."}).json()
     empleado = client.post(

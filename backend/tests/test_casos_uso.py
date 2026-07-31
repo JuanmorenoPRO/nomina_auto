@@ -143,6 +143,26 @@ def test_sin_extras_fuerza_presupuesto_quincenal(session, contexto):
     assert not any(c.codigo.startswith("extra") for c in conceptos)
 
 
+def test_liquidacion_sobrevive_a_empleado_eliminado(session, contexto):
+    """La liquidación es un registro histórico inmutable: si el empleado se borra
+    después (p. ej. la BD no fuerza la FK), la consulta se reconstruye desde el
+    snapshot en vez de romperse."""
+    from nomina.infraestructura.persistencia.modelos import EmpleadoModel
+
+    unidad, empleado, periodo = contexto
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))
+    _liquidar(session).ejecutar(periodo.id, unidad.id)
+
+    session.delete(session.get(EmpleadoModel, empleado.id))  # borrado forzado
+    session.flush()
+
+    liqs = RepositorioLiquidacionesSQL(session).listar(periodo_id=periodo.id)
+    (le,) = liqs[0].por_empleado
+    assert le.empleado.nombre == "FREDY PRUEBA"  # nombre del snapshot
+    assert le.empleado.salario_base == Decimal(2_200_000)
+    assert le.empleado.activo is False
+
+
 def test_reliquidar_reemplaza_y_solo_conserva_la_ultima(session, contexto):
     unidad, empleado, periodo = contexto
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))

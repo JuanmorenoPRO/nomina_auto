@@ -195,21 +195,17 @@ def actualizar_empleado(
 
 @router.delete("/empleados/{empleado_id}", status_code=204)
 def eliminar_empleado(empleado_id: UUID, usuario: UsuarioContadora, session: Sesion):
-    from sqlalchemy.exc import IntegrityError
-
     repo = RepositorioEmpleadosSQL(session)
     empleado = repo.obtener(empleado_id)
     if empleado is None:
         raise HTTPException(404, "No existe el empleado")
-    try:
-        repo.eliminar(empleado_id)
-    except IntegrityError:
-        session.rollback()
+    if repo.tiene_referencias(empleado_id):
         raise HTTPException(
             409,
             "No se puede eliminar: el empleado tiene turnos, liquidaciones o conceptos "
             "manuales registrados. Márquelo como inactivo en su lugar.",
-        ) from None
+        )
+    repo.eliminar(empleado_id)
     auditar(session, usuario.email, "eliminar", "empleado", str(empleado_id),
             antes={"nombre": empleado.nombre, "documento": empleado.documento})
 
