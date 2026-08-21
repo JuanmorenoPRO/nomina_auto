@@ -1,5 +1,7 @@
 """Flujo completo por la API HTTP: el camino que recorrerá la contadora."""
 
+from uuid import uuid4
+
 
 def test_flujo_completo_de_liquidacion(client):
     unidad = client.post(
@@ -349,3 +351,101 @@ def test_reabrir_periodo(client):
 
     r = client.post(f"/periodos/{periodo['id']}/reabrir")
     assert r.status_code == 200 and r.json()["estado"] == "abierto"
+
+
+def test_jornada_ordinaria_por_turno(client):
+    """La casilla «jornada ordinaria» se marca por turno con un PATCH: el turno
+    de domingo deja de pagar festivo y solo se reconoce el excedente del umbral."""
+    unidad = client.post("/unidades", json={"nombre": "Edificio Jornada P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "ANA JORNADA",
+            "documento": "71712121",
+            "cargo": "vigilante",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-08-01", "fecha_fin": "2026-08-15"}
+    ).json()
+    # domingo 2-ago-2026, 06:00-16:00 = 10 h dominicales
+    turno = client.post(
+        "/turnos",
+        json={
+            "empleado_id": empleado["id"],
+            "fecha": "2026-08-02",
+            "hora_inicio": "06:00",
+            "hora_fin": "16:00",
+        },
+    ).json()
+    assert turno["minutos_jornada_ordinaria"] is None
+
+    liq = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    assert "festivo_diurno" in {c["codigo"] for c in liq["empleados"][0]["conceptos"]}
+
+    # Marcada la jornada ordinaria en 7 h: solo las 3 h de más se reconocen.
+    r = client.patch(
+        f"/turnos/{turno['id']}/jornada-ordinaria", json={"minutos_jornada_ordinaria": 420}
+    )
+    assert r.status_code == 200
+    assert r.json()["minutos_jornada_ordinaria"] == 420
+
+    liq2 = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    conceptos = {c["codigo"]: c for c in liq2["empleados"][0]["conceptos"]}
+    assert "festivo_diurno" not in conceptos
+    assert conceptos["extra_diurna_festiva"]["minutos"] == 180
+
+    # Desmarcar (null) vuelve al comportamiento original.
+    r = client.patch(
+        f"/turnos/{turno['id']}/jornada-ordinaria", json={"minutos_jornada_ordinaria": None}
+    )
+    assert r.status_code == 200
+    assert r.json()["minutos_jornada_ordinaria"] is None
+    liq3 = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
+    assert "festivo_diurno" in {c["codigo"] for c in liq3["empleados"][0]["conceptos"]}
+
+
+def test_jornada_ordinaria_rechaza_turno_inexistente_y_periodo_cerrado(client):
+    unidad = client.post("/unidades", json={"nombre": "Edificio Cerrado P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "LUIS CERRADO",
+            "documento": "71712122",
+            "cargo": "vigilante",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-09-01", "fecha_fin": "2026-09-15"}
+    ).json()
+    turno = client.post(
+        "/turnos",
+        json={
+            "empleado_id": empleado["id"],
+            "fecha": "2026-09-06",
+            "hora_inicio": "06:00",
+            "hora_fin": "16:00",
+            "minutos_jornada_ordinaria": 420,
+        },
+    ).json()
+    assert turno["minutos_jornada_ordinaria"] == 420
+
+    assert client.patch(
+        f"/turnos/{uuid4()}/jornada-ordinaria", json={"minutos_jornada_ordinaria": 420}
+    ).status_code == 404
+
+    # umbral no positivo: lo rechaza el schema
+    assert client.patch(
+        f"/turnos/{turno['id']}/jornada-ordinaria", json={"minutos_jornada_ordinaria": 0}
+    ).status_code == 422
+
+    client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]})
+    client.post(f"/periodos/{periodo['id']}/liquidar-periodo")
+    r = client.patch(
+        f"/turnos/{turno['id']}/jornada-ordinaria", json={"minutos_jornada_ordinaria": 300}
+    )
+    assert r.status_code == 400

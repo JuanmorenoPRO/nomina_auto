@@ -25,8 +25,13 @@ SALARIO = Decimal(2_200_000)  # tarifa = 10.000/h
 BASE_QUINCENA = Decimal(1_100_000)  # 110 h × 10.000 = salario/2
 
 
-def turno(fecha: str, inicio: str, fin: str) -> Turno:
-    return Turno(date.fromisoformat(fecha), time.fromisoformat(inicio), time.fromisoformat(fin))
+def turno(fecha: str, inicio: str, fin: str, jornada_ordinaria_h: int | None = None) -> Turno:
+    return Turno(
+        date.fromisoformat(fecha),
+        time.fromisoformat(inicio),
+        time.fromisoformat(fin),
+        minutos_jornada_ordinaria=None if jornada_ordinaria_h is None else jornada_ordinaria_h * 60,
+    )
 
 
 def liquidar_turnos(turnos, desde: str, estrategia: str | None = None):
@@ -225,3 +230,58 @@ def test_nocturna_dentro_de_jornada_solo_paga_recargo():
     assert concepto.factor == Decimal("0.35")
     assert concepto.componentes == {"recargo_nocturno": Decimal("0.35")}
     assert concepto.valor == Decimal(14_000)  # 4 h × 3.500
+
+
+# --- Jornada ordinaria: turno registrado solo para cuadrar horas ---
+
+
+def test_jornada_ordinaria_dentro_del_umbral_no_paga_nada():
+    """Domingo 06:00-13:00 (7 h) marcado con umbral 7 h: el empleado no trabajó,
+    el turno solo cuadra las horas de la quincena → ningún pago adicional."""
+    liq = liquidar_turnos(
+        [turno("2026-03-08", "06:00", "13:00", jornada_ordinaria_h=7)], desde="2026-03-01"
+    )
+    assert valor(liq, "tiempo_ordinario") == BASE_QUINCENA
+    assert adicional(liq) == 0
+
+
+def test_jornada_ordinaria_solo_reconoce_el_excedente_como_extra_festiva():
+    """Domingo 06:00-16:00 (10 h) con umbral 7 h: las 3 h de más sí se reconocen,
+    como festivas Y extra → 3 h × (1 + 0,25 + 0,80) = 3 × 20.500 = 61.500."""
+    liq = liquidar_turnos(
+        [turno("2026-03-08", "06:00", "16:00", jornada_ordinaria_h=7)], desde="2026-03-01"
+    )
+    assert valor(liq, "festivo_diurno") == 0  # las 7 h neutras no pagan recargo
+    concepto = next(c for c in liq.conceptos if c.codigo == "extra_diurna_festiva")
+    assert concepto.minutos == 3 * 60
+    assert concepto.factor == Decimal("2.05")
+    assert concepto.valor == Decimal(61_500)
+    assert adicional(liq) == Decimal(61_500)
+
+
+def test_jornada_ordinaria_tampoco_paga_recargo_nocturno():
+    """Domingo 18:00 → lunes 04:00 con umbral 7 h. Las primeras 7 h no pagan ni
+    dominical ni nocturno; las 3 h restantes (lun 01:00-04:00, día ordinario)
+    son extra nocturna: 3 h × (1 + 0,75) = 3 × 17.500 = 52.500."""
+    liq = liquidar_turnos(
+        [turno("2026-03-08", "18:00", "04:00", jornada_ordinaria_h=7)], desde="2026-03-01"
+    )
+    assert valor(liq, "recargo_nocturno") == 0
+    assert valor(liq, "festivo_nocturno") == 0
+    assert valor(liq, "extra_nocturna") == Decimal(52_500)
+    assert adicional(liq) == Decimal(52_500)
+
+
+def test_jornada_ordinaria_cuenta_como_hora_trabajada_si_la_quincena_es_incompleta():
+    """Las horas neutras sí son horas ordinarias de la quincena: con quincena
+    incompleta deben sumar al balde de tiempo_ordinario aunque caigan en domingo
+    (no se pagan aparte, el salario es su única remuneración)."""
+    turnos = [turno("2026-03-08", "06:00", "14:00", jornada_ordinaria_h=8)]  # domingo, 8 h
+    tramos = segmentar_turnos(turnos, PARAMETROS, CALENDARIO)
+    clasificados = clasificar_extras(tramos, PARAMETROS, date(2026, 3, 1))
+    liq = liquidar(
+        clasificados, SALARIO, PARAMETROS, date(2026, 3, 1),
+        incluir_auxilio_transporte=False, quincena_completa=False,
+    )
+    assert valor(liq, "tiempo_ordinario") == Decimal(80_000)  # 8 h × 10.000
+    assert liq.total_devengado == Decimal(80_000)

@@ -1,9 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Empleado, Periodo, Turno, Unidad } from "../tipos";
-import { DIAS_SEMANA, fechaLocal, minutosDeTurno, normalizarHora } from "../turnos-util";
+import {
+  DIAS_SEMANA,
+  HORAS_JORNADA_ORDINARIA_SUGERIDA,
+  fechaLocal,
+  horasAMinutos,
+  minutosAHoras,
+  minutosDeTurno,
+  normalizarHora,
+} from "../turnos-util";
 
-type Par = { inicio: string; fin: string };
+/** `jornadaOrdinaria` es el texto de las horas (null = sin marcar): se guarda como
+ *  texto igual que `inicio`/`fin` para poder escribir "7,5" sin reformatear en cada
+ *  tecla; se valida al confirmar. */
+type Par = { inicio: string; fin: string; jornadaOrdinaria: string | null };
+
+const PAR_VACIO: Par = { inicio: "", fin: "", jornadaOrdinaria: null };
 
 /** Agrupa los turnos del empleado por fecha ISO en pares editables inicio/fin.
  *  Normaliza a "HH:MM" (el backend devuelve las horas como "HH:MM:SS"). */
@@ -15,17 +28,35 @@ function paresIniciales(dias: string[], turnos: Turno[]): Record<string, Par[]> 
     mapa[t.fecha].push({
       inicio: normalizarHora(t.hora_inicio) ?? t.hora_inicio,
       fin: normalizarHora(t.hora_fin) ?? t.hora_fin,
+      jornadaOrdinaria:
+        t.minutos_jornada_ordinaria === null
+          ? null
+          : minutosAHoras(t.minutos_jornada_ordinaria),
     });
   }
   // Cada día arranca con al menos una fila editable (como la celda de la grilla):
   // se escribe la hora directamente y, si se deja vacía, es un día de descanso.
-  for (const d of dias) if (mapa[d].length === 0) mapa[d].push({ inicio: "", fin: "" });
+  for (const d of dias) if (mapa[d].length === 0) mapa[d].push(PAR_VACIO);
   return mapa;
 }
+
+const TITULO_JORNADA_ORDINARIA =
+  "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
+  "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
+  "ni nocturno; solo el excedente se reconoce, como hora extra.";
 
 /** Clave estable de un turno para el diff al guardar. */
 function clave(fecha: string, inicio: string, fin: string): string {
   return `${fecha}|${inicio}|${fin}`;
+}
+
+/** Clave de un turno del servidor, con las horas normalizadas a "HH:MM". */
+function claveTurno(t: Turno): string {
+  return clave(
+    t.fecha,
+    normalizarHora(t.hora_inicio) ?? t.hora_inicio,
+    normalizarHora(t.hora_fin) ?? t.hora_fin,
+  );
 }
 
 export function PreviaTurnosEmpleado({
@@ -95,7 +126,7 @@ export function PreviaTurnosEmpleado({
     }
   }
 
-  function editar(dia: string, idx: number, campo: keyof Par, valor: string) {
+  function editar(dia: string, idx: number, campo: "inicio" | "fin", valor: string) {
     setPares((prev) => {
       const copia = prev[dia].map((p, i) => (i === idx ? { ...p, [campo]: valor } : p));
       return { ...prev, [dia]: copia };
@@ -103,15 +134,62 @@ export function PreviaTurnosEmpleado({
   }
 
   function agregarPar(dia: string) {
-    setPares((prev) => ({ ...prev, [dia]: [...prev[dia], { inicio: "", fin: "" }] }));
+    setPares((prev) => ({ ...prev, [dia]: [...prev[dia], PAR_VACIO] }));
   }
 
   function quitarPar(dia: string, idx: number) {
     setPares((prev) => {
       const restantes = prev[dia].filter((_, i) => i !== idx);
       // Siempre queda al menos una fila editable (vacía = descanso).
-      return { ...prev, [dia]: restantes.length ? restantes : [{ inicio: "", fin: "" }] };
+      return { ...prev, [dia]: restantes.length ? restantes : [PAR_VACIO] };
     });
+  }
+
+  /** Turnos ya guardados, por clave `fecha|inicio|fin`: dice si una fila de la
+   *  tarjeta corresponde a un turno que existe en el servidor. */
+  const turnoPorClave = useMemo(() => {
+    const mapa = new Map<string, Turno>();
+    for (const t of turnos) mapa.set(claveTurno(t), t);
+    return mapa;
+  }, [turnos]);
+
+  /** El turno guardado que corresponde a una fila, o undefined si es una fila
+   *  nueva (o con las horas ya editadas): entonces la marca viaja en el POST. */
+  function turnoDeLaFila(dia: string, par: Par): Turno | undefined {
+    const inicio = normalizarHora(par.inicio);
+    const fin = normalizarHora(par.fin);
+    if (!inicio || !fin) return undefined;
+    return turnoPorClave.get(clave(dia, inicio, fin));
+  }
+
+  function fijarJornada(dia: string, idx: number, valor: string | null) {
+    setPares((prev) => {
+      const copia = prev[dia].map((p, i) => (i === idx ? { ...p, jornadaOrdinaria: valor } : p));
+      return { ...prev, [dia]: copia };
+    });
+  }
+
+  /** Aplica la marca al instante (como en la grilla) si la fila ya es un turno
+   *  guardado. Si no lo es, se queda en el estado local y se envía al guardar. */
+  async function aplicarJornada(dia: string, idx: number, par: Par, valor: string | null) {
+    const turno = turnoDeLaFila(dia, par);
+    if (!turno) return;
+    const minutos = valor === null ? null : horasAMinutos(valor);
+    if (valor !== null && minutos === null) {
+      // Entrada inválida: se descarta y vuelve el valor guardado, como en la grilla.
+      fijarJornada(dia, idx, turno.minutos_jornada_ordinaria === null
+        ? null
+        : minutosAHoras(turno.minutos_jornada_ordinaria));
+      return;
+    }
+    if (minutos === turno.minutos_jornada_ordinaria) return;
+    setError("");
+    try {
+      await api.turnos.jornadaOrdinaria(turno.id, minutos);
+      alGuardado();
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   /** Minutos de un día usando solo los pares con horas válidas. */
@@ -133,7 +211,12 @@ export function PreviaTurnosEmpleado({
   async function guardar() {
     setError("");
     // Normalizar y validar todos los pares con contenido.
-    const editados: { fecha: string; inicio: string; fin: string }[] = [];
+    const editados: {
+      fecha: string;
+      inicio: string;
+      fin: string;
+      minutosJornadaOrdinaria: number | null;
+    }[] = [];
     for (const d of dias) {
       for (const p of pares[d] ?? []) {
         const vacio = !p.inicio.trim() && !p.fin.trim();
@@ -144,14 +227,17 @@ export function PreviaTurnosEmpleado({
           setError(`Horas inválidas el ${d}: revise "${p.inicio || "—"}" / "${p.fin || "—"}".`);
           return;
         }
-        editados.push({ fecha: d, inicio, fin });
+        const minutos = p.jornadaOrdinaria === null ? null : horasAMinutos(p.jornadaOrdinaria);
+        if (p.jornadaOrdinaria !== null && minutos === null) {
+          setError(`Jornada ordinaria inválida el ${d}: revise "${p.jornadaOrdinaria}".`);
+          return;
+        }
+        editados.push({ fecha: d, inicio, fin, minutosJornadaOrdinaria: minutos });
       }
     }
 
-    // Normalizar también las horas de los originales ("HH:MM:SS" del backend)
-    // para que el diff no borre/recree turnos que no cambiaron.
-    const claveTurno = (t: Turno) =>
-      clave(t.fecha, normalizarHora(t.hora_inicio) ?? t.hora_inicio, normalizarHora(t.hora_fin) ?? t.hora_fin);
+    // El diff compara por `fecha|inicio|fin` con las horas de los originales ya
+    // normalizadas, para no borrar/recrear turnos que no cambiaron.
     const clavesEditadas = new Set(editados.map((e) => clave(e.fecha, e.inicio, e.fin)));
     const clavesOriginales = new Set(turnos.map(claveTurno));
 
@@ -168,6 +254,8 @@ export function PreviaTurnosEmpleado({
           fecha: e.fecha,
           hora_inicio: e.inicio,
           hora_fin: e.fin,
+          // La marca sobrevive a un cambio de horas: el turno se recrea con ella.
+          minutos_jornada_ordinaria: e.minutosJornadaOrdinaria,
         });
       }
       alGuardado();
@@ -225,6 +313,7 @@ export function PreviaTurnosEmpleado({
                 <th>N.º</th>
                 <th>Entra</th>
                 <th>Sale</th>
+                <th title={TITULO_JORNADA_ORDINARIA}>Jornada ord.</th>
                 <th>Total h</th>
                 <th>Descanso</th>
               </tr>
@@ -288,6 +377,53 @@ export function PreviaTurnosEmpleado({
                         </div>
                       ))}
                     </td>
+                    <td className="celda-jornada" title={TITULO_JORNADA_ORDINARIA}>
+                      {filaPares.map((p, i) => {
+                        const marcado = p.jornadaOrdinaria !== null;
+                        const sinHoras = !normalizarHora(p.inicio) || !normalizarHora(p.fin);
+                        if (soloLectura) {
+                          return (
+                            <div key={i} className="linea-hora">
+                              {marcado ? (
+                                <span>{p.jornadaOrdinaria} h</span>
+                              ) : (
+                                <span className="atenuado">—</span>
+                              )}
+                            </div>
+                          );
+                        }
+                        // Sin horas todavía no hay turno que marcar: la casilla
+                        // aparece en cuanto el par de horas es válido.
+                        if (sinHoras) return <div key={i} className="linea-hora" />;
+                        return (
+                          <div key={i} className="linea-hora">
+                            <input
+                              type="checkbox"
+                              checked={marcado}
+                              aria-label="Jornada ordinaria"
+                              onChange={(e) => {
+                                const valor = e.target.checked
+                                  ? String(HORAS_JORNADA_ORDINARIA_SUGERIDA)
+                                  : null;
+                                fijarJornada(d, i, valor);
+                                aplicarJornada(d, i, p, valor);
+                              }}
+                            />
+                            {marcado && (
+                              <input
+                                className="horas-jornada"
+                                value={p.jornadaOrdinaria ?? ""}
+                                inputMode="decimal"
+                                aria-label="Horas de jornada ordinaria"
+                                onChange={(e) => fijarJornada(d, i, e.target.value)}
+                                onBlur={() => aplicarJornada(d, i, p, p.jornadaOrdinaria)}
+                                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </td>
                     <td className="total">{min > 0 ? (min / 60).toFixed(1) : ""}</td>
                     <td className="celda-descanso">
                       {descanso && <span className="atenuado">Descanso</span>}
@@ -308,7 +444,7 @@ export function PreviaTurnosEmpleado({
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4} style={{ textAlign: "right", fontWeight: 600 }}>
+                <td colSpan={5} style={{ textAlign: "right", fontWeight: 600 }}>
                   Total quincena
                 </td>
                 <td className="total">{(totalMinutos / 60).toFixed(1)}</td>

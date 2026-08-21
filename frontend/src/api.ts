@@ -147,8 +147,15 @@ export const api = {
       fecha: string;
       hora_inicio: string;
       hora_fin: string;
+      minutos_jornada_ordinaria?: number | null;
     }) => pedir<Turno>("/turnos", { method: "POST", body: json(datos) }),
     eliminar: (id: string) => pedir<void>(`/turnos/${id}`, { method: "DELETE" }),
+    /** Marca (minutos) o desmarca (null) la jornada ordinaria de un turno. */
+    jornadaOrdinaria: (id: string, minutos: number | null) =>
+      pedir<Turno>(`/turnos/${id}/jornada-ordinaria`, {
+        method: "PATCH",
+        body: json({ minutos_jornada_ordinaria: minutos }),
+      }),
   },
   ajustesQuincena: {
     obtener: (empleadoId: string, periodoId: string) =>

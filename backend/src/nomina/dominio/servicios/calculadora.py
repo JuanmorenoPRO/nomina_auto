@@ -12,6 +12,9 @@ Modelo de pago (el de la planilla real de la contadora):
     * `recargo_nocturno`: horas nocturnas NO extra.
     * `extra_diurna` / `extra_nocturna`: horas extra según su franja.
 - Una hora ordinaria diurna en día ordinario no genera pago adicional.
+- Tampoco lo genera una hora dentro de la «jornada ordinaria» de un turno
+  marcado como tal: el empleado no trabajó y el turno solo cuadra las horas de
+  la quincena, así que no paga recargo dominical/festivo ni nocturno.
 
 Cada componente se resuelve con la vigencia de la FECHA DEL TRAMO. Redondeo:
 una sola vez, al final, por concepto, a pesos enteros con ROUND_HALF_UP.
@@ -64,7 +67,11 @@ class _Clasificacion:
 
 def _clasificar(tramo: Tramo, parametros: ProveedorParametros) -> _Clasificacion | None:
     """Concepto y componentes del factor adicional de un tramo. None = cubierto
-    por el salario base (ordinaria diurna en día ordinario)."""
+    por el salario base (ordinaria diurna en día ordinario, o jornada ordinaria
+    de un turno marcado)."""
+    if tramo.jornada_ordinaria and not tramo.es_extra:
+        return None  # jornada ordinaria del turno: ya cubierta por el salario
+
     fecha = tramo.fecha
     en_descanso = tramo.tipo_dia is not TipoDia.ORDINARIO
     nocturna = tramo.franja is Franja.NOCTURNA
@@ -156,10 +163,12 @@ def liquidar(
         # Solo tramos de día ORDINARIO: un tramo festivo/dominical ya se paga
         # completo por su cuenta (su factor incluye `hora_base`, "el descanso ya
         # estaba remunerado; trabajarlo se paga de nuevo") — contarlo aquí también
-        # sería pagar esas horas dos veces.
+        # sería pagar esas horas dos veces. La jornada ordinaria de un turno
+        # marcado sí cuenta aunque caiga en festivo: no paga nada aparte, el
+        # salario es su única remuneración.
         minutos_trabajados = sum(
             t.minutos for t in tramos_clasificados
-            if not t.es_extra and t.tipo_dia is TipoDia.ORDINARIO
+            if not t.es_extra and (t.tipo_dia is TipoDia.ORDINARIO or t.jornada_ordinaria)
         )
         minutos_quincena = min(minutos_trabajados, minutos_quincena_legal)
     conceptos.append(

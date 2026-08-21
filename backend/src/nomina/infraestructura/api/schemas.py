@@ -169,6 +169,14 @@ class TurnoCrear(BaseModel):
     fecha: date
     hora_inicio: time
     hora_fin: time  # hora_fin <= hora_inicio ⇒ el turno cruza medianoche
+    # «Jornada ordinaria»: turno registrado para cuadrar horas, no trabajado.
+    minutos_jornada_ordinaria: int | None = Field(default=None, gt=0, le=24 * 60)
+
+
+class TurnoJornadaOrdinaria(BaseModel):
+    """Marca/desmarca la jornada ordinaria de un turno ya registrado."""
+
+    minutos_jornada_ordinaria: int | None = Field(default=None, gt=0, le=24 * 60)
 
 
 class TurnoRespuesta(BaseModel):
@@ -178,6 +186,7 @@ class TurnoRespuesta(BaseModel):
     hora_inicio: time
     hora_fin: time
     cruza_medianoche: bool
+    minutos_jornada_ordinaria: int | None = None
 
 
 class ParametroCrear(BaseModel):
