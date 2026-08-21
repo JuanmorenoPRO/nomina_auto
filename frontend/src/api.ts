@@ -4,6 +4,7 @@ import type {
   ConfigUnidad,
   Empleado,
   Festivo,
+  Incoherencia,
   Liquidacion,
   Parametro,
   Periodo,
@@ -165,7 +166,11 @@ export const api = {
     marcar: (
       empleadoId: string,
       periodoId: string,
-      ajuste: Partial<{ quincena_incompleta: boolean; sin_extras: boolean }>,
+      ajuste: Partial<{
+        quincena_incompleta: boolean;
+        sin_extras: boolean;
+        auxilio_por_dias_laborados: boolean;
+      }>,
     ) =>
       pedir<AjusteQuincena>(
         `/ajustes-quincena?empleado_id=${empleadoId}&periodo_id=${periodoId}`,
@@ -177,6 +182,8 @@ export const api = {
       pedir<Parametro[]>(`/parametros${fecha ? `?fecha=${fecha}` : ""}`),
     crear: (datos: { codigo: string; valor: string; vigente_desde: string; norma: string }) =>
       pedir<Parametro>("/parametros", { method: "POST", body: json(datos) }),
+    /** Pares de parámetros acoplados descuadrados; lista vacía = todo bien. */
+    coherencia: () => pedir<Incoherencia[]>("/parametros/coherencia"),
   },
   festivos: {
     delAnio: (anio: number) => pedir<Festivo[]>(`/festivos/${anio}`),

@@ -30,7 +30,10 @@ from nomina.dominio.entidades.concepto_liquidado import (
     ConceptoManualRegistrado,
 )
 from nomina.dominio.entidades.empleado import Empleado
-from nomina.dominio.entidades.parametro_legal import ConjuntoParametros
+from nomina.dominio.entidades.parametro_legal import (
+    ConjuntoParametros,
+    incoherencias_horas_quincena,
+)
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
 from nomina.dominio.servicios.calendario_festivos import festivos_por_ley
@@ -368,14 +371,17 @@ def obtener_ajuste_quincena(
     empleado_id: UUID, periodo_id: UUID, usuario: UsuarioOperador, session: Sesion
 ):
     """Marcas del empleado en esta quincena (desde el cuadro de turnos):
-    `quincena_incompleta` (liquidar sobre lo trabajado) y `sin_extras` (no cobrar
-    extra por turno; solo sobre el excedente del presupuesto quincenal)."""
+    `quincena_incompleta` (liquidar sobre lo trabajado), `sin_extras` (no cobrar
+    extra por turno; solo sobre el excedente del presupuesto quincenal) y
+    `auxilio_por_dias_laborados` (prorratear el auxilio de transporte sobre los
+    días con turno en vez de pagar el quincenal plano)."""
     repo = RepositorioAjustesQuincenaSQL(session)
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id,
         periodo_id=periodo_id,
         quincena_incompleta=repo.quincena_incompleta(empleado_id, periodo_id),
         sin_extras=repo.sin_extras(empleado_id, periodo_id),
+        auxilio_por_dias_laborados=repo.auxilio_por_dias_laborados(empleado_id, periodo_id),
     )
 
 
@@ -397,14 +403,18 @@ def marcar_ajuste_quincena(
         periodo_id,
         quincena_incompleta=datos.quincena_incompleta,
         sin_extras=datos.sin_extras,
+        auxilio_por_dias_laborados=datos.auxilio_por_dias_laborados,
     )
     incompleta = repo.quincena_incompleta(empleado_id, periodo_id)
     sin_extras = repo.sin_extras(empleado_id, periodo_id)
+    auxilio_por_dias = repo.auxilio_por_dias_laborados(empleado_id, periodo_id)
     auditar(session, usuario.email, "actualizar", "ajuste_quincena", f"{empleado_id}:{periodo_id}",
-            despues={"quincena_incompleta": incompleta, "sin_extras": sin_extras})
+            despues={"quincena_incompleta": incompleta, "sin_extras": sin_extras,
+                     "auxilio_por_dias_laborados": auxilio_por_dias})
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id, periodo_id=periodo_id,
         quincena_incompleta=incompleta, sin_extras=sin_extras,
+        auxilio_por_dias_laborados=auxilio_por_dias,
     )
 
 
@@ -494,6 +504,22 @@ def listar_parametros(usuario: UsuarioOperador, session: Sesion, fecha: date | N
             norma=p.norma,
         )
         for p in parametros
+    ]
+
+
+@router.get("/parametros/coherencia", response_model=list[schemas.IncoherenciaRespuesta])
+def coherencia_parametros(usuario: UsuarioOperador, session: Sesion):
+    """Pares de parámetros acoplados que no cuadran (lista vacía = todo bien).
+
+    Hoy solo `divisor_hora_ordinaria == 2 × horas_quincena`: cambiar uno sin el otro
+    hace que el tiempo ordinario deje de pagar salario/2, sin que nada más lo avise.
+    Se reporta aquí en vez de rechazarse al arrancar para que una base ya descuadrada
+    siga siendo utilizable — justo cuando hay que entrar a corregirla.
+    """
+    conjunto = ConjuntoParametros(parametros=tuple(RepositorioParametrosSQL(session).listar()))
+    return [
+        schemas.IncoherenciaRespuesta(desde=i.desde, hasta=i.hasta, detalle=i.detalle)
+        for i in incoherencias_horas_quincena(conjunto)
     ]
 
 

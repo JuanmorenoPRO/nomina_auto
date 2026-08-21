@@ -69,6 +69,7 @@ export interface AjusteQuincena {
   periodo_id: string;
   quincena_incompleta: boolean;
   sin_extras: boolean;
+  auxilio_por_dias_laborados: boolean;
 }
 
 export interface Periodo {
@@ -98,6 +99,13 @@ export interface Parametro {
   vigente_desde: string;
   vigente_hasta: string | null;
   norma: string;
+}
+
+/** Par de parámetros acoplados que no cuadran en un tramo de fechas. */
+export interface Incoherencia {
+  desde: string;
+  hasta: string | null;
+  detalle: string;
 }
 
 export interface Festivo {

@@ -49,6 +49,10 @@ PARAMETROS_SEMILLA: tuple[ParametroLegal, ...] = (
     # Auxilio de transporte (mensual) — verificar decreto de cada año
     _p("auxilio_transporte_mensual", "200000", date(2025, 1, 1), date(2025, 12, 31), "Dec. 1573/2024"),
     _p("auxilio_transporte_mensual", "249095", date(2026, 1, 1), None, "planilla contadora 2026"),
+    # Divisor del auxilio cuando se prorratea por días laborados: el mes comercial de
+    # 30 días de la nómina colombiana. Con 15 días da el auxilio quincenal de siempre.
+    _p("dias_mes_auxilio_transporte", "30", date(2000, 1, 1), None,
+       "mes comercial de 30 días (CST art. 134; práctica de nómina)"),
     _p("estrategia_clasificacion_extras", "presupuesto_quincenal", date(2000, 1, 1), None,
        "decisión de negocio: método actual de la contadora"),
     # Tasas para apropiaciones de seguridad social (segunda quincena)

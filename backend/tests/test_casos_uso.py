@@ -25,6 +25,7 @@ from nomina.infraestructura.persistencia.repositorios import (
     RepositorioTurnosSQL,
     RepositorioUnidadesSQL,
 )
+from nomina.semilla import PARAMETROS_SEMILLA
 
 
 @pytest.fixture
@@ -143,6 +144,28 @@ def test_sin_extras_fuerza_presupuesto_quincenal(session, contexto):
     assert not any(c.codigo.startswith("extra") for c in conceptos)
 
 
+def test_auxilio_por_dias_no_cuenta_dos_veces_el_turno_que_cruza_medianoche(session, contexto):
+    """Un nocturno 18:00→06:00 se parte en dos tramos (medianoche), pero es UN día
+    laborado: el conteo va sobre la fecha de ENTRADA del turno, no sobre los tramos.
+    Dos nocturnos consecutivos son 2 días, no 3 ni 4."""
+    unidad, empleado, periodo = contexto
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 20), time(18), time(6))
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 21), time(18), time(6))
+
+    RepositorioAjustesQuincenaSQL(session).marcar(
+        empleado.id, periodo.id, auxilio_por_dias_laborados=True
+    )
+    liquidacion = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    auxilio = next(
+        c
+        for c in liquidacion.por_empleado[0].liquidacion.conceptos
+        if c.codigo == "auxilio_transporte"
+    )
+    assert auxilio.componentes == {"dias_laborados": Decimal(2)}
+    # 249.095 / 30 × 2 = 16.606,33… → 16.606
+    assert auxilio.valor == Decimal(16_606)
+
+
 def test_reliquidar_reemplaza_y_solo_conserva_la_ultima(session, contexto):
     unidad, empleado, periodo = contexto
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))
@@ -194,7 +217,7 @@ def test_liquidacion_guarda_snapshot_de_parametros(session, contexto):
     modelo = session.get(LiquidacionModel, liquidacion.id)
     codigos = {p["codigo"] for p in modelo.parametros_snapshot}
     assert "recargo_dominical_festivo" in codigos
-    assert len(modelo.parametros_snapshot) == 35
+    assert len(modelo.parametros_snapshot) == len(PARAMETROS_SEMILLA)
 
 
 def test_actualizar_parametro_cierra_vigencia_anterior(session):

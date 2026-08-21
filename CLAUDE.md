@@ -17,6 +17,18 @@ la fecha de liquidación. Motivo: la ley colombiana cambia de forma escalonada (
 2026 hay dos cambios con fechas distintas: dominical 80→90% el 1-jul y jornada 44→42 h el
 15-jul).
 
+Dos avisos que ya costaron un error de dinero:
+
+- **`horas_quincena` y `divisor_hora_ordinaria` se mueven SIEMPRE juntos.** El salario
+  quincenal es `salario/2` y el motor lo paga como `horas_quincena × (salario / divisor)`,
+  así que debe cumplirse `divisor == 2 × horas_quincena` (110/220 hasta el 14-jul-2026,
+  105/210 desde el 15-jul). Cambiar uno solo descuadra el tiempo ordinario sin que nada
+  falle. Lo verifica `incoherencias_horas_quincena()` y se avisa en Configuración.
+- **`sembrar_parametros` es idempotente POR CÓDIGO**, así que solo agrega códigos nuevos:
+  si se cambia la vigencia de un parámetro ya sembrado, las bases existentes NO se enteran.
+  Ese cambio exige una **migración de datos** (plantilla:
+  `c1b7e40a9f38_horas_quincena_105_desde_jul_2026.py`).
+
 ## Arquitectura (hexagonal)
 
 ```
@@ -85,6 +97,12 @@ dominio  ←  aplicacion  ←  infraestructura
   digitado en el turno) no pagan recargo dominical/festivo ni nocturno — las cubre el
   salario — y solo el excedente sobre N se reconoce, como hora extra con su tipo de día
   real. La clasificación la hace la segmentación; el clasificador de extras no la toca.
+- **Auxilio por días laborados (marca por empleado y quincena):** el auxilio de transporte
+  se prorratea sobre los días distintos con turno (`mensual / dias_mes × días`) en vez de
+  pagarse quincenal plano — para quien solo trabajó parte de la quincena. Un turno que cruza
+  medianoche cuenta un día (la fecha de entrada), no dos. La marca **manda** sobre
+  `incapacitado`/`ocasional`: marcada, el auxilio se paga aunque esos estados lo quiten
+  entero. Con los 15 días de una quincena completa da el mismo valor que el plano.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).

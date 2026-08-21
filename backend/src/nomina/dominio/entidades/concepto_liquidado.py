@@ -15,7 +15,8 @@ class ConceptoLiquidado:
     `componentes` desglosa el factor (ej. {'hora_base': 1, 'recargo_dominical_festivo':
     0.80, 'recargo_nocturno': 0.35}) para que el reporte sea auditable.
     Los conceptos sin horas (ej. auxilio de transporte, deducciones) llevan
-    minutos=0 y factor=None.
+    minutos=0 y factor=None; en ellos `componentes` lleva lo que explique el valor
+    (ej. {'dias_laborados': 6} en el auxilio prorrateado) o va vacío.
     """
 
     codigo: str

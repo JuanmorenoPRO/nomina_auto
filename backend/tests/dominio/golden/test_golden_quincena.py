@@ -181,6 +181,39 @@ def test_auxilio_de_transporte_quincenal():
     assert valor(liq, "auxilio_transporte") == Decimal(124_548)
 
 
+def test_auxilio_prorrateado_por_dias_laborados():
+    """El empleado solo alcanzó a trabajar parte de la quincena: el auxilio se
+    paga proporcional a los días con turno, sobre el mes comercial de 30 días."""
+    liq = liquidar(
+        [], SALARIO, PARAMETROS, date(2026, 5, 1),
+        incluir_auxilio_transporte=True, dias_laborados=6,
+    )
+    # 249.095 / 30 × 6 = 49.819 exactos
+    assert valor(liq, "auxilio_transporte") == Decimal(49_819)
+
+
+def test_auxilio_prorrateado_de_quincena_completa_es_el_quincenal():
+    """Invariante de la base 30: 15 días prorrateados dan el mismo valor que el
+    auxilio quincenal plano, así que marcar la casilla de más no cambia nada."""
+    liq = liquidar(
+        [], SALARIO, PARAMETROS, date(2026, 5, 1),
+        incluir_auxilio_transporte=True, dias_laborados=15,
+    )
+    assert valor(liq, "auxilio_transporte") == Decimal(124_548)
+
+
+def test_auxilio_prorrateado_sin_dias_laborados_es_cero():
+    """Cero días con turno: el auxilio es 0, pero la línea se emite igual (con
+    `dias_laborados` a la vista) para que el cero quede explicado en el reporte."""
+    liq = liquidar(
+        [], SALARIO, PARAMETROS, date(2026, 5, 1),
+        incluir_auxilio_transporte=True, dias_laborados=0,
+    )
+    assert valor(liq, "auxilio_transporte") == Decimal(0)
+    concepto = next(c for c in liq.conceptos if c.codigo == "auxilio_transporte")
+    assert concepto.componentes == {"dias_laborados": Decimal(0)}
+
+
 def test_quincena_incompleta_paga_solo_horas_trabajadas():
     """Marcado a mano que el empleado no laboró toda la quincena (incapacidad,
     ausencia, ingreso/retiro a mitad de periodo): las ordinarias se pagan sobre
@@ -285,3 +318,17 @@ def test_jornada_ordinaria_cuenta_como_hora_trabajada_si_la_quincena_es_incomple
     )
     assert valor(liq, "tiempo_ordinario") == Decimal(80_000)  # 8 h × 10.000
     assert liq.total_devengado == Decimal(80_000)
+
+
+def test_tiempo_ordinario_de_agosto_2026_es_salario_medio():
+    """Con el par vigente desde el 15-jul-2026 (105 h / divisor 210), el tiempo
+    ordinario de una quincena completa da exactamente salario/2.
+
+    Fija el valor que estaba mal en la base del usuario: con `horas_quincena` = 110
+    quedado y el divisor ya en 210, pagaba 1.152.381 — 52.381 de más por empleado.
+    """
+    liq = liquidar([], SALARIO, PARAMETROS, date(2026, 8, 1))
+    assert valor(liq, "tiempo_ordinario") == SALARIO / 2 == Decimal(1_100_000)
+    # Y antes del corte, con el par viejo (110 h / divisor 220), también da salario/2.
+    liq_antes = liquidar([], SALARIO, PARAMETROS, date(2026, 7, 1))
+    assert valor(liq_antes, "tiempo_ordinario") == SALARIO / 2

@@ -120,6 +120,7 @@ class ConceptoManualRespuesta(BaseModel):
 class AjusteQuincenaActualizar(BaseModel):
     quincena_incompleta: bool | None = None
     sin_extras: bool | None = None
+    auxilio_por_dias_laborados: bool | None = None
 
 
 class AjusteQuincenaRespuesta(BaseModel):
@@ -127,6 +128,7 @@ class AjusteQuincenaRespuesta(BaseModel):
     periodo_id: UUID
     quincena_incompleta: bool
     sin_extras: bool
+    auxilio_por_dias_laborados: bool
 
 
 class PeriodoCrear(BaseModel):
@@ -202,6 +204,14 @@ class ParametroRespuesta(BaseModel):
     vigente_desde: date
     vigente_hasta: date | None
     norma: str
+
+
+class IncoherenciaRespuesta(BaseModel):
+    """Par de parámetros acoplados que no cuadran en un tramo de fechas."""
+
+    desde: date
+    hasta: date | None
+    detalle: str
 
 
 class FestivoAjustar(BaseModel):

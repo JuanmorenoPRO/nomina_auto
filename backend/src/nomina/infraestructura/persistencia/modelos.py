@@ -229,6 +229,10 @@ class AjusteQuincenaModel(Base):
       no superó el presupuesto quincenal → no se le cobran horas extra por turno.
       Fuerza la estrategia `presupuesto_quincenal` (extra solo sobre el excedente
       de las horas de la quincena); los recargos nocturno/dominical se mantienen.
+    - `auxilio_por_dias_laborados`: el auxilio de transporte se prorratea sobre los
+      días con turno de la quincena en vez de pagarse quincenal plano. Manda sobre
+      `incapacitado`/`ocasional`: marcado, el auxilio se paga (prorrateado) aunque
+      esos estados normalmente lo quiten por completo.
     """
 
     __tablename__ = "ajuste_quincena"
@@ -239,3 +243,4 @@ class AjusteQuincenaModel(Base):
     periodo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("periodo_liquidacion.id"), index=True)
     quincena_incompleta: Mapped[bool] = mapped_column(Boolean, default=False)
     sin_extras: Mapped[bool] = mapped_column(Boolean, default=False)
+    auxilio_por_dias_laborados: Mapped[bool] = mapped_column(Boolean, default=False)

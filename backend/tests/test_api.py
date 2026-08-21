@@ -2,6 +2,8 @@
 
 from uuid import uuid4
 
+from nomina.semilla import PARAMETROS_SEMILLA
+
 
 def test_flujo_completo_de_liquidacion(client):
     unidad = client.post(
@@ -136,7 +138,8 @@ def test_incapacitado_sin_auxilio_y_quincena_incompleta_por_horas_trabajadas(cli
     liq = client.post(f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}).json()
     conceptos = {c["codigo"]: c for c in liq["empleados"][0]["conceptos"]}
     assert "auxilio_transporte" in conceptos
-    assert conceptos["tiempo_ordinario"]["valor"] == 1_100_000  # 110 h × 10.000 (tope legal)
+    # ago-2026: 105 h × (2.200.000/210) = salario/2. El par horas/divisor va junto.
+    assert conceptos["tiempo_ordinario"]["valor"] == 1_100_000
 
     # Se marca incapacitado + quincena incompleta.
     r = client.patch(f"/empleados/{empleado['id']}", json={"incapacitado": True})
@@ -157,6 +160,77 @@ def test_incapacitado_sin_auxilio_y_quincena_incompleta_por_horas_trabajadas(cli
     assert "auxilio_transporte" not in conceptos2
     # divisor vigente en ago-2026 es 210 (post 15-jul-2026): 2.200.000/210 × 8 h
     assert conceptos2["tiempo_ordinario"]["valor"] == 83_810
+
+
+def test_auxilio_por_dias_laborados_manda_sobre_incapacitado(client):
+    """El empleado se incapacitó a mitad de quincena pero alcanzó a trabajar unos
+    días: marcar el prorrateo le devuelve el auxilio, proporcional a esos días,
+    aunque estar incapacitado normalmente se lo quite entero."""
+    unidad = client.post("/unidades", json={"nombre": "Edificio Prorrateo P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "LUZ PRORRATEO",
+            "documento": "71712122",
+            "cargo": "aseo",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-08-01", "fecha_fin": "2026-08-15"}
+    ).json()
+    # Tres días con turno; el del 5 es partido, así que cuenta como UN día.
+    for fecha, inicio, fin in [
+        ("2026-08-03", "06:00", "14:00"),
+        ("2026-08-04", "06:00", "14:00"),
+        ("2026-08-05", "06:00", "10:00"),
+        ("2026-08-05", "12:00", "16:00"),
+    ]:
+        r = client.post(
+            "/turnos",
+            json={
+                "empleado_id": empleado["id"],
+                "fecha": fecha,
+                "hora_inicio": inicio,
+                "hora_fin": fin,
+            },
+        )
+        assert r.status_code == 201, r.text
+
+    # El flag arranca apagado aunque no exista fila de ajustes.
+    r = client.get(
+        "/ajustes-quincena",
+        params={"empleado_id": empleado["id"], "periodo_id": periodo["id"]},
+    )
+    assert r.json()["auxilio_por_dias_laborados"] is False
+
+    client.patch(f"/empleados/{empleado['id']}", json={"incapacitado": True})
+    liq = client.post(
+        f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}
+    ).json()
+    assert "auxilio_transporte" not in {c["codigo"] for c in liq["empleados"][0]["conceptos"]}
+
+    r = client.put(
+        "/ajustes-quincena",
+        params={"empleado_id": empleado["id"], "periodo_id": periodo["id"]},
+        json={"auxilio_por_dias_laborados": True},
+    )
+    assert r.status_code == 200
+    assert r.json()["auxilio_por_dias_laborados"] is True
+    # No pisa los flags hermanos.
+    assert r.json()["quincena_incompleta"] is False
+    assert r.json()["sin_extras"] is False
+
+    liq2 = client.post(
+        f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}
+    ).json()
+    auxilio = next(
+        c for c in liq2["empleados"][0]["conceptos"] if c["codigo"] == "auxilio_transporte"
+    )
+    # 249.095 / 30 × 3 días = 24.909,50 → 24.910
+    assert auxilio["valor"] == 24_910
+    assert auxilio["componentes"] == {"dias_laborados": "3"}
 
 
 def test_validaciones_de_turnos(client):
@@ -300,10 +374,26 @@ def test_conceptos_fijos_por_unidad_se_aplican_solos(client):
     assert cuota["valor"] == 7095
 
 
+def test_coherencia_de_parametros(client):
+    """El par horas/divisor sembrado cuadra; descuadrarlo lo delata el endpoint."""
+    assert client.get("/parametros/coherencia").json() == []
+
+    # Bajar el divisor a 210 sin bajar las horas a 105: el error real de agosto-2026.
+    r = client.post("/parametros", json={
+        "codigo": "divisor_hora_ordinaria", "valor": "999",
+        "vigente_desde": "2027-01-01", "norma": "prueba"})
+    assert r.status_code == 201, r.text
+
+    (aviso,) = client.get("/parametros/coherencia").json()
+    assert aviso["desde"] == "2027-01-01"
+    assert aviso["hasta"] is None
+    assert "999" in aviso["detalle"]
+
+
 def test_parametros_y_festivos(client):
     # historial sembrado y filtro por fecha
     todos = client.get("/parametros").json()
-    assert len(todos) == 35
+    assert len(todos) == len(PARAMETROS_SEMILLA)
     vigentes = client.get("/parametros", params={"fecha": "2026-07-13"}).json()
     dominical = next(p for p in vigentes if p["codigo"] == "recargo_dominical_festivo")
     assert dominical["valor"] == "0.90"

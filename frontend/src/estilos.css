@@ -242,6 +242,9 @@ table.grilla td.total.fila-activa { background: var(--resalte-linea); }
 }
 .boton-previa:hover { background: #e0edf9; border-color: #93c5fd; }
 
+/* Cruz médica junto al nombre de un empleado incapacitado (grilla y tarjeta) */
+.marca-incapacitado { color: #dc2626; font-weight: 700; cursor: help; }
+
 /* Tarjeta modal de previsualización/edición de turnos por empleado */
 .modal-previa {
   width: min(680px, 94vw);
@@ -261,6 +264,16 @@ table.grilla td.total.fila-activa { background: var(--resalte-linea); }
   margin-bottom: 12px;
 }
 .previa-etiqueta { color: #64748b; font-size: 10px; letter-spacing: 0.5px; display: block; }
+/* Estados del empleado (activo/incapacitado/ocasional) bajo el encabezado */
+.previa-estados {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.previa-estados .previa-etiqueta { display: inline; }
 .previa-scroll { overflow: auto; flex: 1; }
 
 table.tarjeta-turnos {

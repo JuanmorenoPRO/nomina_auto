@@ -115,6 +115,7 @@ def liquidar(
     parametros: ProveedorParametros,
     fecha_periodo: date,
     incluir_auxilio_transporte: bool = True,
+    dias_laborados: int | None = None,
     factores_override: dict[str, Decimal] | None = None,
     conceptos_manuales: tuple[ConceptoManual, ...] = (),
     descontar_seguridad_social: bool = False,
@@ -131,6 +132,13 @@ def liquidar(
     agrega devengados/deducciones cargados a mano. Si `descontar_seguridad_social`,
     se generan las deducciones de salud y pensión sobre el IBC (devengados
     salariales, sin auxilio de transporte).
+
+    `dias_laborados` (default `None`): con `None` el auxilio de transporte es el
+    quincenal plano (mensual / 2), se hayan trabajado los 15 días o uno solo. Con un
+    número, se prorratea sobre el mes comercial: `mensual / dias_mes × dias_laborados`
+    — para el empleado que solo alcanzó a trabajar parte de la quincena (incapacidad,
+    ingreso/retiro a mitad de periodo). Con los 15 días de una quincena completa da el
+    mismo valor que el plano, así que marcarlo de más no cambia nada.
 
     `quincena_completa` (default `True`): el salario cubre el tope legal completo
     de horas ordinarias sin importar cuánto sumen los tramos (así lo hace la
@@ -212,12 +220,25 @@ def liquidar(
     )
 
     if incluir_auxilio_transporte:
-        auxilio = parametros.auxilio_transporte_mensual(fecha_periodo) / 2
+        mensual = parametros.auxilio_transporte_mensual(fecha_periodo)
+        if dias_laborados is None:
+            auxilio = mensual / 2
+            componentes_auxilio: dict[str, Decimal] = {}
+        else:
+            # Prorrateo sobre el mes comercial. `componentes` deja el número de días a
+            # la vista en el reporte, que si no sería un valor sin explicación.
+            auxilio = (
+                mensual
+                / parametros.dias_mes_auxilio_transporte(fecha_periodo)
+                * dias_laborados
+            )
+            componentes_auxilio = {"dias_laborados": Decimal(dias_laborados)}
         conceptos.append(
             ConceptoLiquidado(
                 codigo="auxilio_transporte",
                 nombre=NOMBRES_CONCEPTOS["auxilio_transporte"],
                 minutos=0,
+                componentes=componentes_auxilio,
                 valor=_redondear_pesos(auxilio),
             )
         )

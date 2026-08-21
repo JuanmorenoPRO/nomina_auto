@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Festivo, Parametro, RegistroAuditoria, Rol, Usuario } from "../tipos";
+import type {
+  Festivo,
+  Incoherencia,
+  Parametro,
+  RegistroAuditoria,
+  Rol,
+  Usuario,
+} from "../tipos";
 
 const NOMBRES_PARAMETROS: Record<string, string> = {
   jornada_nocturna_inicio: "Inicio de jornada nocturna",
@@ -14,6 +21,7 @@ const NOMBRES_PARAMETROS: Record<string, string> = {
   divisor_hora_ordinaria: "Divisor de hora ordinaria (horas/mes)",
   tope_horas_extra_dia: "Tope de horas extra por día",
   auxilio_transporte_mensual: "Auxilio de transporte mensual",
+  dias_mes_auxilio_transporte: "Días del mes para prorratear el auxilio",
   estrategia_clasificacion_extras: "Estrategia de clasificación de extras",
   horas_jornada_diaria: "Jornada diaria (umbral estrategia 'diaria')",
   aporte_salud_empleado: "% aporte salud del empleado",
@@ -178,8 +186,16 @@ function SeccionParametros() {
   const [mensaje, setMensaje] = useState("");
   const [form, setForm] = useState({ codigo: "", valor: "", vigente_desde: "", norma: "" });
 
+  const [incoherencias, setIncoherencias] = useState<Incoherencia[]>([]);
+
   const recargar = useCallback(
-    () => api.parametros.listar().then(setParametros).catch((e) => setError(e.message)),
+    () =>
+      Promise.all([api.parametros.listar(), api.parametros.coherencia()])
+        .then(([lista, avisos]) => {
+          setParametros(lista);
+          setIncoherencias(avisos);
+        })
+        .catch((e) => setError(e.message)),
     [],
   );
   useEffect(() => {
@@ -217,6 +233,20 @@ function SeccionParametros() {
         Cuando la ley cambie, cree una <b>nueva vigencia</b>: nunca se edita el valor
         histórico. El motor usa el valor vigente en la fecha de cada turno.
       </p>
+      {incoherencias.length > 0 && (
+        <div className="error">
+          <b>Parámetros descuadrados.</b> Las quincenas de estos rangos se están
+          liquidando mal hasta que se corrija:
+          <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+            {incoherencias.map((i, n) => (
+              <li key={n}>
+                Desde el {i.desde} {i.hasta ? `hasta el ${i.hasta}` : "en adelante"}:{" "}
+                {i.detalle}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <form className="fila tarjeta" onSubmit={crearVigencia}>
         <label className="campo">
