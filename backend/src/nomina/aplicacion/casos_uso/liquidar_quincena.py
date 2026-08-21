@@ -82,8 +82,8 @@ class RepositorioAjustesQuincena(Protocol):
     - `sin_extras`: no calcular horas extra por turno; solo cobrar extra sobre el
       excedente del presupuesto quincenal (el empleado concentró horas para
       descansar otros días sin superar el tope de la quincena).
-    - `auxilio_por_dias_laborados`: prorratear el auxilio de transporte sobre los
-      días con turno en vez de pagar el quincenal plano."""
+    - `auxilio_por_dias_laborados`: prorratear el auxilio de transporte en
+      proporción a lo laborado en vez de pagar el quincenal plano."""
 
     def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def sin_extras(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
@@ -142,11 +142,9 @@ class LiquidarQuincena:
                 self.conceptos_manuales.de_empleado_en_periodo(empleado.id, periodo_id)
             )
             incompleta = self.ajustes_quincena.quincena_incompleta(empleado.id, periodo_id)
-            # Auxilio prorrateado: días DISTINTOS con turno. `Turno.fecha` es el día en
-            # que el turno ENTRA, así que un nocturno 18:00–06:00 cuenta un día y no dos
-            # (los tramos sí se parten en medianoche: contarlos ahí daría 2).
+            # El prorrateo del auxilio lo hace el dominio sobre las horas no-extra
+            # efectivamente laboradas; aquí solo se transmite la marca.
             por_dias = self.ajustes_quincena.auxilio_por_dias_laborados(empleado.id, periodo_id)
-            dias_laborados = len({r.turno.fecha for r in registrados}) if por_dias else None
             resultado = liquidar(
                 clasificados,
                 empleado.salario_base,
@@ -157,7 +155,7 @@ class LiquidarQuincena:
                 # alcanzó a trabajar unos días y esos sí generan auxilio).
                 incluir_auxilio_transporte=por_dias
                 or not (empleado.incapacitado or empleado.ocasional),
-                dias_laborados=dias_laborados,
+                auxilio_prorrateado=por_dias,
                 factores_override=unidad.config.factores_override,
                 conceptos_manuales=manuales,
                 descontar_seguridad_social=unidad.descuenta_seguridad_social,

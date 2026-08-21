@@ -25,7 +25,6 @@ CODIGOS_PARAMETROS = frozenset({
     "divisor_hora_ordinaria",
     "tope_horas_extra_dia",
     "auxilio_transporte_mensual",
-    "dias_mes_auxilio_transporte",
     "estrategia_clasificacion_extras",
     "horas_jornada_diaria",
     "aporte_salud_empleado",
@@ -118,9 +117,6 @@ class ConjuntoParametros:
 
     def auxilio_transporte_mensual(self, fecha: date) -> Decimal:
         return self.decimal("auxilio_transporte_mensual", fecha)
-
-    def dias_mes_auxilio_transporte(self, fecha: date) -> Decimal:
-        return self.decimal("dias_mes_auxilio_transporte", fecha)
 
     def estrategia_clasificacion_extras(self, fecha: date) -> str:
         return self.valor("estrategia_clasificacion_extras", fecha)

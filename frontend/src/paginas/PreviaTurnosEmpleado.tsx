@@ -55,21 +55,21 @@ const ESTADOS_EMPLEADO = [
   {
     campo: "incapacitado",
     etiqueta: "Incapacitado",
-    titulo: "Incapacitado: sin auxilio de transporte, salvo que se prorratee por días laborados.",
+    titulo: "Incapacitado: sin auxilio de transporte, salvo que se prorratee por lo laborado.",
   },
   {
     campo: "ocasional",
     etiqueta: "Ocasional",
-    titulo: "Ocasional: sin auxilio de transporte, salvo que se prorratee por días laborados.",
+    titulo: "Ocasional: sin auxilio de transporte, salvo que se prorratee por lo laborado.",
   },
 ] as const;
 
 type CampoEstado = (typeof ESTADOS_EMPLEADO)[number]["campo"];
 
 const TITULO_AUXILIO_POR_DIAS =
-  "El auxilio de transporte se paga proporcional a los días con turno de la quincena " +
-  "(auxilio mensual ÷ 30 × días), en vez del auxilio quincenal completo. Marcado, se " +
-  "paga aunque el empleado esté incapacitado u ocasional.";
+  "El auxilio de transporte se paga en proporción a las horas laboradas de la quincena " +
+  "(auxilio mensual × horas ÷ horas del mes), en vez del auxilio quincenal completo. " +
+  "Marcado, se paga aunque el empleado esté incapacitado u ocasional.";
 
 const TITULO_JORNADA_ORDINARIA =
   "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
@@ -327,14 +327,6 @@ export function PreviaTurnosEmpleado({
     [pares, dias],
   );
 
-  /** Días con al menos un turno: la base del auxilio prorrateado. Es una vista
-   *  previa de lo que contará el backend — cuenta lo que hay en la tarjeta, así
-   *  que mientras haya cambios sin guardar puede diferir de lo que se liquide. */
-  const diasLaborados = useMemo(
-    () => dias.filter((d) => minutosDia(d) > 0).length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pares, dias],
-  );
 
   async function guardar() {
     setError("");
@@ -605,7 +597,7 @@ export function PreviaTurnosEmpleado({
               disabled={soloLectura || guardandoIncompleta}
               onChange={(e) => marcarQuincenaIncompleta(e.target.checked)}
             />
-            No laboró todas las horas de la quincena (liquidar sobre lo trabajado)
+            No laboró todas las horas de la quincena: pagar el tiempo ordinario sobre las horas trabajadas (festivas y nocturnas incluidas) en vez del presupuesto completo
           </label>
           <label className="casilla">
             <input
@@ -624,8 +616,8 @@ export function PreviaTurnosEmpleado({
               disabled={soloLectura || guardandoAuxilio}
               onChange={(e) => marcarAuxilioPorDias(e.target.checked)}
             />
-            Calcular el auxilio de transporte con los días laborados ({diasLaborados}{" "}
-            {diasLaborados === 1 ? "día" : "días"})
+            Calcular el auxilio de transporte con lo laborado (
+            {(totalMinutos / 60).toFixed(1)} h)
           </label>
         </div>
         <div className="fila" style={{ justifyContent: "flex-end" }}>

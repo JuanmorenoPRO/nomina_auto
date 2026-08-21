@@ -162,9 +162,9 @@ def test_incapacitado_sin_auxilio_y_quincena_incompleta_por_horas_trabajadas(cli
     assert conceptos2["tiempo_ordinario"]["valor"] == 83_810
 
 
-def test_auxilio_por_dias_laborados_manda_sobre_incapacitado(client):
-    """El empleado se incapacitó a mitad de quincena pero alcanzó a trabajar unos
-    días: marcar el prorrateo le devuelve el auxilio, proporcional a esos días,
+def test_auxilio_prorrateado_manda_sobre_incapacitado(client):
+    """El empleado se incapacitó a mitad de quincena pero alcanzó a trabajar unas
+    horas: marcar el prorrateo le devuelve el auxilio, proporcional a lo laborado,
     aunque estar incapacitado normalmente se lo quite entero."""
     unidad = client.post("/unidades", json={"nombre": "Edificio Prorrateo P.H."}).json()
     empleado = client.post(
@@ -180,7 +180,7 @@ def test_auxilio_por_dias_laborados_manda_sobre_incapacitado(client):
     periodo = client.post(
         "/periodos", json={"fecha_inicio": "2026-08-01", "fecha_fin": "2026-08-15"}
     ).json()
-    # Tres días con turno; el del 5 es partido, así que cuenta como UN día.
+    # 24 h laboradas en total (el día 5 es turno partido: 4 h + 4 h).
     for fecha, inicio, fin in [
         ("2026-08-03", "06:00", "14:00"),
         ("2026-08-04", "06:00", "14:00"),
@@ -228,9 +228,9 @@ def test_auxilio_por_dias_laborados_manda_sobre_incapacitado(client):
     auxilio = next(
         c for c in liq2["empleados"][0]["conceptos"] if c["codigo"] == "auxilio_transporte"
     )
-    # 249.095 / 30 × 3 días = 24.909,50 → 24.910
-    assert auxilio["valor"] == 24_910
-    assert auxilio["componentes"] == {"dias_laborados": "3"}
+    # 24 h laboradas, divisor 210 (ago-2026): 249.095 × 24 / 210 = 28.468
+    assert auxilio["valor"] == 28_468
+    assert auxilio["componentes"] == {"horas_laboradas": "24"}
 
 
 def test_validaciones_de_turnos(client):

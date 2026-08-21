@@ -97,12 +97,22 @@ dominio  ←  aplicacion  ←  infraestructura
   digitado en el turno) no pagan recargo dominical/festivo ni nocturno — las cubre el
   salario — y solo el excedente sobre N se reconoce, como hora extra con su tipo de día
   real. La clasificación la hace la segmentación; el clasificador de extras no la toca.
-- **Auxilio por días laborados (marca por empleado y quincena):** el auxilio de transporte
-  se prorratea sobre los días distintos con turno (`mensual / dias_mes × días`) en vez de
-  pagarse quincenal plano — para quien solo trabajó parte de la quincena. Un turno que cruza
-  medianoche cuenta un día (la fecha de entrada), no dos. La marca **manda** sobre
-  `incapacitado`/`ocasional`: marcada, el auxilio se paga aunque esos estados lo quiten
-  entero. Con los 15 días de una quincena completa da el mismo valor que el plano.
+- **Lo laborado (base compartida):** todos los minutos trabajados que **no** sean extra
+  —ordinarios, festivos y nocturnos por igual—, topados al presupuesto de la quincena. Es la
+  base de las dos marcas de abajo. Las horas festivas entran porque en la quincena completa
+  el presupuesto también las incluye (la planilla liquida las 105 h de TIEMPO ORDINARIO con
+  las festivas dentro, y encima paga TIEMPO FESTIVO ×1.90); excluirlas solo al prorratear le
+  pagaría menos al empleado parcial que al completo por la misma hora. Las extras no entran:
+  se pagan por encima del presupuesto y su factor ya trae la `hora_base`.
+- **Quincena incompleta (marca por empleado y quincena):** el tiempo ordinario se paga sobre
+  «lo laborado» en vez del presupuesto completo. No suprime nada más: dominicales, recargos
+  nocturnos y extras se siguen liquidando en sus propias líneas.
+- **Auxilio prorrateado (marca por empleado y quincena):** el auxilio de transporte se paga
+  en proporción a lo laborado, `mensual × horas / divisor_hora_ordinaria`, en vez del
+  quincenal plano. Es la cuenta de la contadora (`mensual/30 × días`, con `días = horas /
+  jornada`) reducida a horas. La marca **manda** sobre `incapacitado`/`ocasional`: marcada,
+  el auxilio se paga aunque esos estados lo quiten entero. Con la quincena completa da el
+  mismo valor que el plano. Referencia verificada: `tests/dominio/golden/test_golden_lorena.py`.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).

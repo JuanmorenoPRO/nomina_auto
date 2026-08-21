@@ -115,7 +115,7 @@ def liquidar(
     parametros: ProveedorParametros,
     fecha_periodo: date,
     incluir_auxilio_transporte: bool = True,
-    dias_laborados: int | None = None,
+    auxilio_prorrateado: bool = False,
     factores_override: dict[str, Decimal] | None = None,
     conceptos_manuales: tuple[ConceptoManual, ...] = (),
     descontar_seguridad_social: bool = False,
@@ -133,12 +133,12 @@ def liquidar(
     se generan las deducciones de salud y pensión sobre el IBC (devengados
     salariales, sin auxilio de transporte).
 
-    `dias_laborados` (default `None`): con `None` el auxilio de transporte es el
-    quincenal plano (mensual / 2), se hayan trabajado los 15 días o uno solo. Con un
-    número, se prorratea sobre el mes comercial: `mensual / dias_mes × dias_laborados`
-    — para el empleado que solo alcanzó a trabajar parte de la quincena (incapacidad,
-    ingreso/retiro a mitad de periodo). Con los 15 días de una quincena completa da el
-    mismo valor que el plano, así que marcarlo de más no cambia nada.
+    `auxilio_prorrateado` (default `False`): con `False` el auxilio de transporte es
+    el quincenal plano (mensual / 2), se haya trabajado la quincena entera o un día.
+    Con `True` se paga en proporción a lo laborado: `mensual × horas / divisor`, donde
+    el divisor son las horas del mes, igual que el auxilio son los pesos del mes.
+    Es la cuenta de la contadora (`mensual/30 × días`, con `días = horas / jornada`)
+    reducida a horas, y con la quincena completa da el quincenal plano.
 
     `quincena_completa` (default `True`): el salario cubre el tope legal completo
     de horas ordinarias sin importar cuánto sumen los tramos (así lo hace la
@@ -147,6 +147,9 @@ def liquidar(
     empleado no laboró toda la quincena (incapacidad, ausencia, ingreso/retiro a
     mitad de periodo) — las horas ordinarias se pagan sobre lo efectivamente
     trabajado, topado al legal.
+
+    Las dos marcas comparten la misma base (`minutos_base`): todo lo trabajado que no
+    sea extra, topado al presupuesto legal. Ver el comentario en el cuerpo.
     """
     override = factores_override or {}
     tarifa_hora = salario_mensual / parametros.divisor_hora_ordinaria(fecha_periodo)
@@ -165,20 +168,22 @@ def liquidar(
     conceptos: list[ConceptoLiquidado] = []
 
     minutos_quincena_legal = int(parametros.horas_quincena(fecha_periodo) * MINUTOS_POR_HORA)
-    if quincena_completa:
-        minutos_quincena = minutos_quincena_legal
-    else:
-        # Solo tramos de día ORDINARIO: un tramo festivo/dominical ya se paga
-        # completo por su cuenta (su factor incluye `hora_base`, "el descanso ya
-        # estaba remunerado; trabajarlo se paga de nuevo") — contarlo aquí también
-        # sería pagar esas horas dos veces. La jornada ordinaria de un turno
-        # marcado sí cuenta aunque caiga en festivo: no paga nada aparte, el
-        # salario es su única remuneración.
-        minutos_trabajados = sum(
-            t.minutos for t in tramos_clasificados
-            if not t.es_extra and (t.tipo_dia is TipoDia.ORDINARIO or t.jornada_ordinaria)
-        )
-        minutos_quincena = min(minutos_trabajados, minutos_quincena_legal)
+
+    # Base de «lo laborado», compartida por el tiempo ordinario prorrateado y por el
+    # auxilio: TODO lo trabajado que no sea extra, topado al presupuesto legal.
+    #
+    # Las horas festivas y nocturnas entran aquí igual que las ordinarias, porque en
+    # la quincena completa también están dentro del presupuesto (la planilla de la
+    # contadora liquida 105 h de TIEMPO ORDINARIO con las horas festivas incluidas, y
+    # encima paga TIEMPO FESTIVO ×1.90). Excluirlas solo al prorratear le pagaría menos
+    # al empleado parcial que al completo por la misma hora festiva.
+    #
+    # Las extras NO entran: se pagan por encima del presupuesto y su factor ya trae la
+    # `hora_base`, así que contarlas aquí les pagaría la base dos veces.
+    minutos_no_extra = sum(t.minutos for t in tramos_clasificados if not t.es_extra)
+    minutos_base = min(minutos_no_extra, minutos_quincena_legal)
+
+    minutos_quincena = minutos_quincena_legal if quincena_completa else minutos_base
     conceptos.append(
         ConceptoLiquidado(
             codigo="tiempo_ordinario",
@@ -221,18 +226,17 @@ def liquidar(
 
     if incluir_auxilio_transporte:
         mensual = parametros.auxilio_transporte_mensual(fecha_periodo)
-        if dias_laborados is None:
+        if not auxilio_prorrateado:
             auxilio = mensual / 2
             componentes_auxilio: dict[str, Decimal] = {}
         else:
-            # Prorrateo sobre el mes comercial. `componentes` deja el número de días a
-            # la vista en el reporte, que si no sería un valor sin explicación.
-            auxilio = (
-                mensual
-                / parametros.dias_mes_auxilio_transporte(fecha_periodo)
-                * dias_laborados
-            )
-            componentes_auxilio = {"dias_laborados": Decimal(dias_laborados)}
+            # Proporción de lo laborado: pesos del mes × horas / horas del mes.
+            # Se prorratea aunque la quincena se liquide completa — son dos marcas
+            # independientes. `componentes` deja las horas a la vista en el reporte,
+            # que si no sería un valor sin explicación.
+            horas_base = Decimal(minutos_base) / MINUTOS_POR_HORA
+            auxilio = mensual * horas_base / parametros.divisor_hora_ordinaria(fecha_periodo)
+            componentes_auxilio = {"horas_laboradas": horas_base}
         conceptos.append(
             ConceptoLiquidado(
                 codigo="auxilio_transporte",

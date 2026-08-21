@@ -21,7 +21,6 @@ const NOMBRES_PARAMETROS: Record<string, string> = {
   divisor_hora_ordinaria: "Divisor de hora ordinaria (horas/mes)",
   tope_horas_extra_dia: "Tope de horas extra por día",
   auxilio_transporte_mensual: "Auxilio de transporte mensual",
-  dias_mes_auxilio_transporte: "Días del mes para prorratear el auxilio",
   estrategia_clasificacion_extras: "Estrategia de clasificación de extras",
   horas_jornada_diaria: "Jornada diaria (umbral estrategia 'diaria')",
   aporte_salud_empleado: "% aporte salud del empleado",
