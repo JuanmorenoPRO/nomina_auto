@@ -56,3 +56,35 @@ export function horasAMinutos(texto: string): number | null {
 export function minutosAHoras(minutos: number): string {
   return String(Number((minutos / 60).toFixed(2)));
 }
+
+/** Hora de inicio convencional de un turno de relleno. Se elige las 06:00 porque
+ *  los turnos nocturnos terminan a esa hora: así nunca solapa con el del día
+ *  anterior (la validación rechaza `inicio < fin_anterior`, no `inicio == fin`). */
+export const HORA_INICIO_JORNADA_ORDINARIA = "06:00";
+
+/** Horario de un turno de relleno de `minutos`: 06:00 y la hora de salida que le
+ *  corresponde. */
+export function ventanaJornadaOrdinaria(minutos: number): { inicio: string; fin: string } {
+  const [h, m] = HORA_INICIO_JORNADA_ORDINARIA.split(":").map(Number);
+  const fin = (h * 60 + m + minutos) % (24 * 60);
+  const hh = String(Math.floor(fin / 60)).padStart(2, "0");
+  const mm = String(fin % 60).padStart(2, "0");
+  return { inicio: HORA_INICIO_JORNADA_ORDINARIA, fin: `${hh}:${mm}` };
+}
+
+/** ¿El turno es «de relleno», es decir, se registró solo para cuadrar las horas
+ *  de la quincena? Se reconoce por su forma, sin guardar ninguna bandera: empieza
+ *  a la hora convencional y TODO él es jornada ordinaria. Cambiarle el umbral lo
+ *  redimensiona; un turno real como 06:00–16:00 marcado con 7 h no lo es (7 ≠ 10),
+ *  así que a ese nunca se le mueve la hora de salida. */
+export function esTurnoDeRelleno(
+  inicio: string,
+  fin: string,
+  minutosJornada: number | null,
+): boolean {
+  if (minutosJornada === null) return false;
+  const i = normalizarHora(inicio);
+  const f = normalizarHora(fin);
+  if (!i || !f || i !== HORA_INICIO_JORNADA_ORDINARIA) return false;
+  return minutosDeTurno({ hora_inicio: i, hora_fin: f }) === minutosJornada;
+}

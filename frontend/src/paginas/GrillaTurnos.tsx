@@ -5,11 +5,13 @@ import {
   DIAS_SEMANA,
   HORAS_JORNADA_ORDINARIA_SUGERIDA,
   diasDelPeriodo,
+  esTurnoDeRelleno,
   fechaLocal,
   horasAMinutos,
   minutosAHoras,
   minutosDeTurno,
   normalizarHora,
+  ventanaJornadaOrdinaria,
 } from "../turnos-util";
 import { PreviaTurnosEmpleado } from "./PreviaTurnosEmpleado";
 
@@ -104,6 +106,52 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
     async (id: string, minutos: number | null) => {
       try {
         await api.turnos.jornadaOrdinaria(id, minutos);
+        await recargarTurnos();
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    },
+    [recargarTurnos],
+  );
+
+  /** Crea un turno de relleno en un día sin turnos: la casilla es lo único que
+   *  hay que marcar, el horario lo pone `ventanaJornadaOrdinaria`. */
+  const crearTurnoDeRelleno = useCallback(
+    async (empleadoId: string, fecha: string, minutos: number) => {
+      setError("");
+      const { inicio, fin } = ventanaJornadaOrdinaria(minutos);
+      try {
+        await api.turnos.registrar({
+          empleado_id: empleadoId,
+          fecha,
+          hora_inicio: inicio,
+          hora_fin: fin,
+          minutos_jornada_ordinaria: minutos,
+        });
+        await recargarTurnos();
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    },
+    [recargarTurnos],
+  );
+
+  /** En un turno de relleno el horario lo dicta el umbral, así que cambiarlo
+   *  obliga a reemplazar el turno (no basta el PATCH de la marca). Se borra antes
+   *  de crear para no chocar con la validación de solapamientos. */
+  const redimensionarRelleno = useCallback(
+    async (turno: Turno, minutos: number) => {
+      setError("");
+      const { inicio, fin } = ventanaJornadaOrdinaria(minutos);
+      try {
+        await api.turnos.eliminar(turno.id);
+        await api.turnos.registrar({
+          empleado_id: turno.empleado_id,
+          fecha: turno.fecha,
+          hora_inicio: inicio,
+          hora_fin: fin,
+          minutos_jornada_ordinaria: minutos,
+        });
         await recargarTurnos();
       } catch (e) {
         setError((e as Error).message);
@@ -228,6 +276,8 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
                           alAgregar={agregarTurno}
                           alEliminar={eliminarTurno}
                           alMarcarJornada={marcarJornadaOrdinaria}
+                          alCrearRelleno={crearTurnoDeRelleno}
+                          alRedimensionarRelleno={redimensionarRelleno}
                         />
                       ))}
                       <td className={`total${filaActiva ? " fila-activa" : ""}`}>
@@ -275,6 +325,8 @@ type CeldaTurnoProps = {
   alAgregar: (empleadoId: string, fecha: string, texto: string) => void;
   alEliminar: (id: string) => void;
   alMarcarJornada: (id: string, minutos: number | null) => void;
+  alCrearRelleno: (empleadoId: string, fecha: string, minutos: number) => void;
+  alRedimensionarRelleno: (turno: Turno, minutos: number) => void;
 };
 
 // `memo`: con props estables (callbacks + primitivos), al cambiar la celda
@@ -293,6 +345,8 @@ const CeldaTurno = memo(function CeldaTurno({
   alAgregar,
   alEliminar,
   alMarcarJornada,
+  alCrearRelleno,
+  alRedimensionarRelleno,
 }: CeldaTurnoProps) {
   const [texto, setTexto] = useState("");
   const clases = [
@@ -321,7 +375,14 @@ const CeldaTurno = memo(function CeldaTurno({
               <button title="Eliminar turno" onClick={() => alEliminar(t.id)}>×</button>
             )}
           </span>
-          {!soloLectura && <MarcaJornadaOrdinaria turno={t} alMarcar={alMarcarJornada} />}
+          {!soloLectura && (
+            <MarcaJornadaOrdinaria
+              turno={t}
+              alMarcar={alMarcarJornada}
+              alEliminar={alEliminar}
+              alRedimensionar={alRedimensionarRelleno}
+            />
+          )}
         </span>
       ))}
       {!soloLectura && (
@@ -337,6 +398,19 @@ const CeldaTurno = memo(function CeldaTurno({
           }}
         />
       )}
+      {/* Día de descanso: la casilla crea por sí sola el turno de relleno. */}
+      {!soloLectura && turnos.length === 0 && (
+        <label className="marca-jornada" title={TITULO_JORNADA_ORDINARIA}>
+          <input
+            type="checkbox"
+            checked={false}
+            onChange={() =>
+              alCrearRelleno(empleadoId, fecha, HORAS_JORNADA_ORDINARIA_SUGERIDA * 60)
+            }
+          />
+          ord.
+        </label>
+      )}
     </td>
   );
 });
@@ -351,14 +425,24 @@ const TITULO_JORNADA_ORDINARIA =
 function MarcaJornadaOrdinaria({
   turno,
   alMarcar,
+  alEliminar,
+  alRedimensionar,
 }: {
   turno: Turno;
   alMarcar: (id: string, minutos: number | null) => void;
+  alEliminar: (id: string) => void;
+  alRedimensionar: (turno: Turno, minutos: number) => void;
 }) {
   const marcado = turno.minutos_jornada_ordinaria !== null;
   const guardadas =
     turno.minutos_jornada_ordinaria === null ? "" : minutosAHoras(turno.minutos_jornada_ordinaria);
   const [horas, setHoras] = useState(guardadas);
+  // Turno que existe solo por la marca: la casilla lo creó y la casilla lo quita.
+  const esRelleno = esTurnoDeRelleno(
+    turno.hora_inicio,
+    turno.hora_fin,
+    turno.minutos_jornada_ordinaria,
+  );
 
   // El valor lo manda el servidor: al recargar los turnos se resincroniza.
   useEffect(() => setHoras(guardadas), [guardadas]);
@@ -369,7 +453,19 @@ function MarcaJornadaOrdinaria({
       setHoras(guardadas); // entrada inválida: se descarta
       return;
     }
-    if (minutos !== turno.minutos_jornada_ordinaria) alMarcar(turno.id, minutos);
+    if (minutos === turno.minutos_jornada_ordinaria) return;
+    // En un relleno el horario lo dicta el umbral: hay que reemplazar el turno.
+    if (esRelleno) alRedimensionar(turno, minutos);
+    else alMarcar(turno.id, minutos);
+  }
+
+  function alternar(marcar: boolean) {
+    if (marcar) {
+      alMarcar(turno.id, HORAS_JORNADA_ORDINARIA_SUGERIDA * 60);
+      return;
+    }
+    if (esRelleno) alEliminar(turno.id); // desmarcar un relleno = quitar el turno
+    else alMarcar(turno.id, null);
   }
 
   return (
@@ -378,9 +474,7 @@ function MarcaJornadaOrdinaria({
         <input
           type="checkbox"
           checked={marcado}
-          onChange={(e) =>
-            alMarcar(turno.id, e.target.checked ? HORAS_JORNADA_ORDINARIA_SUGERIDA * 60 : null)
-          }
+          onChange={(e) => alternar(e.target.checked)}
         />
         ord.
       </label>

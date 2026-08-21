@@ -4,19 +4,22 @@ import type { Empleado, Periodo, Turno, Unidad } from "../tipos";
 import {
   DIAS_SEMANA,
   HORAS_JORNADA_ORDINARIA_SUGERIDA,
+  esTurnoDeRelleno,
   fechaLocal,
   horasAMinutos,
   minutosAHoras,
   minutosDeTurno,
   normalizarHora,
+  ventanaJornadaOrdinaria,
 } from "../turnos-util";
 
 /** `jornadaOrdinaria` es el texto de las horas (null = sin marcar): se guarda como
  *  texto igual que `inicio`/`fin` para poder escribir "7,5" sin reformatear en cada
- *  tecla; se valida al confirmar. */
-type Par = { inicio: string; fin: string; jornadaOrdinaria: string | null };
+ *  tecla; se valida al confirmar. `relleno` marca las filas cuyo horario lo dicta el
+ *  umbral (ver `esTurnoDeRelleno`): cambiarlo las redimensiona. */
+type Par = { inicio: string; fin: string; jornadaOrdinaria: string | null; relleno: boolean };
 
-const PAR_VACIO: Par = { inicio: "", fin: "", jornadaOrdinaria: null };
+const PAR_VACIO: Par = { inicio: "", fin: "", jornadaOrdinaria: null, relleno: false };
 
 /** Agrupa los turnos del empleado por fecha ISO en pares editables inicio/fin.
  *  Normaliza a "HH:MM" (el backend devuelve las horas como "HH:MM:SS"). */
@@ -25,13 +28,17 @@ function paresIniciales(dias: string[], turnos: Turno[]): Record<string, Par[]> 
   for (const d of dias) mapa[d] = [];
   for (const t of turnos) {
     if (!mapa[t.fecha]) mapa[t.fecha] = [];
+    const inicio = normalizarHora(t.hora_inicio) ?? t.hora_inicio;
+    const fin = normalizarHora(t.hora_fin) ?? t.hora_fin;
     mapa[t.fecha].push({
-      inicio: normalizarHora(t.hora_inicio) ?? t.hora_inicio,
-      fin: normalizarHora(t.hora_fin) ?? t.hora_fin,
+      inicio,
+      fin,
       jornadaOrdinaria:
         t.minutos_jornada_ordinaria === null
           ? null
           : minutosAHoras(t.minutos_jornada_ordinaria),
+      // Se deriva del dato guardado, así que sobrevive a recargar la página.
+      relleno: esTurnoDeRelleno(inicio, fin, t.minutos_jornada_ordinaria),
     });
   }
   // Cada día arranca con al menos una fila editable (como la celda de la grilla):
@@ -128,7 +135,10 @@ export function PreviaTurnosEmpleado({
 
   function editar(dia: string, idx: number, campo: "inicio" | "fin", valor: string) {
     setPares((prev) => {
-      const copia = prev[dia].map((p, i) => (i === idx ? { ...p, [campo]: valor } : p));
+      const copia = prev[dia].map((p, i) =>
+        // Editar las horas a mano rompe el vínculo con el umbral.
+        i === idx ? { ...p, [campo]: valor, relleno: false } : p,
+      );
       return { ...prev, [dia]: copia };
     });
   }
@@ -162,11 +172,56 @@ export function PreviaTurnosEmpleado({
     return turnoPorClave.get(clave(dia, inicio, fin));
   }
 
-  function fijarJornada(dia: string, idx: number, valor: string | null) {
+  function actualizarPar(dia: string, idx: number, cambios: Partial<Par>) {
     setPares((prev) => {
-      const copia = prev[dia].map((p, i) => (i === idx ? { ...p, jornadaOrdinaria: valor } : p));
+      const copia = prev[dia].map((p, i) => (i === idx ? { ...p, ...cambios } : p));
       return { ...prev, [dia]: copia };
     });
+  }
+
+  /** Marca o desmarca la jornada ordinaria de una fila.
+   *
+   *  En un día sin horas, marcar CREA el turno de relleno (06:00 + el umbral) y
+   *  desmarcarlo lo quita: el día vuelve a «Descanso» y el diff de `guardar()`
+   *  borra el turno si ya estaba en el servidor. */
+  function alternarJornada(dia: string, idx: number, par: Par, marcado: boolean) {
+    const horas = String(HORAS_JORNADA_ORDINARIA_SUGERIDA);
+    if (!marcado) {
+      if (par.relleno) {
+        actualizarPar(dia, idx, PAR_VACIO);
+        return;
+      }
+      actualizarPar(dia, idx, { jornadaOrdinaria: null });
+      aplicarJornada(dia, idx, par, null);
+      return;
+    }
+    if (normalizarHora(par.inicio) && normalizarHora(par.fin)) {
+      actualizarPar(dia, idx, { jornadaOrdinaria: horas });
+      aplicarJornada(dia, idx, par, horas);
+      return;
+    }
+    actualizarPar(dia, idx, {
+      ...ventanaJornadaOrdinaria(HORAS_JORNADA_ORDINARIA_SUGERIDA * 60),
+      jornadaOrdinaria: horas,
+      relleno: true,
+    });
+  }
+
+  /** Confirma el umbral escrito. En un turno de relleno el horario lo dicta el
+   *  umbral, así que el turno se redimensiona; en uno normal solo cambia la marca. */
+  function confirmarJornada(dia: string, idx: number, par: Par) {
+    if (!par.relleno) {
+      aplicarJornada(dia, idx, par, par.jornadaOrdinaria);
+      return;
+    }
+    const minutos = par.jornadaOrdinaria === null ? null : horasAMinutos(par.jornadaOrdinaria);
+    if (minutos === null) {
+      // Entrada inválida: vuelve el largo que el turno tiene ahora.
+      const actual = minutosDeTurno({ hora_inicio: par.inicio, hora_fin: par.fin });
+      actualizarPar(dia, idx, { jornadaOrdinaria: minutosAHoras(actual) });
+      return;
+    }
+    actualizarPar(dia, idx, ventanaJornadaOrdinaria(minutos));
   }
 
   /** Aplica la marca al instante (como en la grilla) si la fila ya es un turno
@@ -177,9 +232,12 @@ export function PreviaTurnosEmpleado({
     const minutos = valor === null ? null : horasAMinutos(valor);
     if (valor !== null && minutos === null) {
       // Entrada inválida: se descarta y vuelve el valor guardado, como en la grilla.
-      fijarJornada(dia, idx, turno.minutos_jornada_ordinaria === null
-        ? null
-        : minutosAHoras(turno.minutos_jornada_ordinaria));
+      actualizarPar(dia, idx, {
+        jornadaOrdinaria:
+          turno.minutos_jornada_ordinaria === null
+            ? null
+            : minutosAHoras(turno.minutos_jornada_ordinaria),
+      });
       return;
     }
     if (minutos === turno.minutos_jornada_ordinaria) return;
@@ -380,7 +438,6 @@ export function PreviaTurnosEmpleado({
                     <td className="celda-jornada" title={TITULO_JORNADA_ORDINARIA}>
                       {filaPares.map((p, i) => {
                         const marcado = p.jornadaOrdinaria !== null;
-                        const sinHoras = !normalizarHora(p.inicio) || !normalizarHora(p.fin);
                         if (soloLectura) {
                           return (
                             <div key={i} className="linea-hora">
@@ -392,22 +449,15 @@ export function PreviaTurnosEmpleado({
                             </div>
                           );
                         }
-                        // Sin horas todavía no hay turno que marcar: la casilla
-                        // aparece en cuanto el par de horas es válido.
-                        if (sinHoras) return <div key={i} className="linea-hora" />;
+                        // La casilla se dibuja siempre: en un día sin horas,
+                        // marcarla crea el turno de relleno con su horario.
                         return (
                           <div key={i} className="linea-hora">
                             <input
                               type="checkbox"
                               checked={marcado}
                               aria-label="Jornada ordinaria"
-                              onChange={(e) => {
-                                const valor = e.target.checked
-                                  ? String(HORAS_JORNADA_ORDINARIA_SUGERIDA)
-                                  : null;
-                                fijarJornada(d, i, valor);
-                                aplicarJornada(d, i, p, valor);
-                              }}
+                              onChange={(e) => alternarJornada(d, i, p, e.target.checked)}
                             />
                             {marcado && (
                               <input
@@ -415,8 +465,10 @@ export function PreviaTurnosEmpleado({
                                 value={p.jornadaOrdinaria ?? ""}
                                 inputMode="decimal"
                                 aria-label="Horas de jornada ordinaria"
-                                onChange={(e) => fijarJornada(d, i, e.target.value)}
-                                onBlur={() => aplicarJornada(d, i, p, p.jornadaOrdinaria)}
+                                onChange={(e) =>
+                                  actualizarPar(d, i, { jornadaOrdinaria: e.target.value })
+                                }
+                                onBlur={() => confirmarJornada(d, i, p)}
                                 onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                               />
                             )}

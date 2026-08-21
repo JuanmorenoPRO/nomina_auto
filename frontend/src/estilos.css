@@ -180,27 +180,28 @@ table.grilla td .chip button {
   border: none; background: none; cursor: pointer; color: #64748b; padding: 0 2px;
 }
 /* Hora + botón eliminar en una línea; la marca de jornada baja a la siguiente. */
+table.grilla td .chip > .marca-jornada { flex-basis: 100%; }
 table.grilla td .chip .chip-horas {
   flex-basis: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-table.grilla td .chip .marca-jornada {
-  flex-basis: 100%;
+table.grilla td .marca-jornada {
   display: flex;
   align-items: center;
   gap: 3px;
   font-size: 10px;
   color: #475569;
 }
-table.grilla td .chip .marca-jornada label {
+table.grilla td .marca-jornada label {
   display: flex; align-items: center; gap: 2px; cursor: pointer;
 }
-table.grilla td .chip .marca-jornada input[type="checkbox"] {
+table.grilla td .marca-jornada input[type="checkbox"] {
   width: auto; margin: 0; border: none; padding: 0;
 }
-table.grilla td .chip .horas-jornada {
+table.grilla td > .marca-jornada { margin-top: 2px; }
+table.grilla td .horas-jornada {
   width: 32px; text-align: right; padding: 0 2px; font-size: 10px;
 }
 table.grilla td input {
