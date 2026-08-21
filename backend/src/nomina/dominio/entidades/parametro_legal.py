@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 from nomina.dominio.valores.vigencia import Vigencia
@@ -139,3 +139,58 @@ class ConjuntoParametros:
             "aprop_intereses_cesantias",
         ]
         return {c: self.decimal(c, fecha) for c in codigos}
+
+
+@dataclass(frozen=True)
+class IncoherenciaParametros:
+    """Un tramo de fechas en que dos parámetros acoplados no cuadran entre sí."""
+
+    desde: date
+    hasta: date | None
+    detalle: str
+
+
+def incoherencias_horas_quincena(conjunto: ConjuntoParametros) -> list[IncoherenciaParametros]:
+    """Tramos donde se rompe `divisor_hora_ordinaria == 2 × horas_quincena`.
+
+    Los dos parámetros son un par acoplado: el motor paga el salario quincenal como
+    `horas_quincena × (salario / divisor)`, que solo da `salario / 2` si el divisor es
+    el doble de las horas. Cambiar uno sin el otro (ej. bajar el divisor a 210 por la
+    jornada de 42 h y dejar las horas en 110) sobrepaga o subpaga el tiempo ordinario
+    sin que nada lo avise.
+
+    Se reporta, NO se impone: elevarlo a error en `ConjuntoParametros.__post_init__`
+    dejaría la aplicación caída en cualquier base que ya arrastre el descuadre, que es
+    justo cuando hace falta poder entrar a corregirlo. Lista vacía = todo cuadrado.
+    """
+    cortes = sorted(
+        {
+            p.vigencia.desde
+            for p in conjunto.parametros
+            if p.codigo in ("horas_quincena", "divisor_hora_ordinaria")
+        }
+    )
+    hallazgos: list[IncoherenciaParametros] = []
+    for i, desde in enumerate(cortes):
+        # El tramo va hasta el día anterior al siguiente corte (o abierto si es el último).
+        siguiente = cortes[i + 1] if i + 1 < len(cortes) else None
+        hasta = siguiente - timedelta(days=1) if siguiente else None
+        try:
+            horas = conjunto.horas_quincena(desde)
+            divisor = conjunto.divisor_hora_ordinaria(desde)
+        except ParametroNoVigenteError:
+            continue  # sin valor vigente ahí: no hay nada que comparar
+        if divisor != horas * 2:
+            hallazgos.append(
+                IncoherenciaParametros(
+                    desde=desde,
+                    hasta=hasta,
+                    detalle=(
+                        f"horas_quincena = {horas} y divisor_hora_ordinaria = {divisor} "
+                        f"no cuadran: el divisor debe ser el doble de las horas. El par "
+                        f"correcto es {horas}/{horas * 2} o {divisor / 2}/{divisor}. "
+                        f"Mientras tanto el tiempo ordinario no paga salario/2."
+                    ),
+                )
+            )
+    return hallazgos

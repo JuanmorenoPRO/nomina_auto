@@ -153,6 +153,13 @@ Siempre se auditan: cambios de parámetros legales y ediciones de turnos ya liqu
 | `jornada_maxima_semanal` | 42 | desde 15-jul-2026 | Ley 2101/2021 |
 | `horas_quincena` | 110 | vigente | práctica actual |
 | `divisor_hora_ordinaria` | 220 | vigente | confirmado en planilla contadora |
+
+⚠️ `horas_quincena` y `divisor_hora_ordinaria` son un **par acoplado**: debe cumplirse
+`divisor == 2 × horas_quincena` (110/220 hasta el 14-jul-2026; 105/210 desde el 15-jul),
+porque el salario quincenal es `salario/2 = horas_quincena × (salario / divisor)`.
+Cambiar uno sin el otro descuadra el tiempo ordinario sin que el motor falle; lo
+reporta `incoherencias_horas_quincena()` y se ve en Configuración.
+
 | `tope_horas_extra_dia` | 2 | vigente | CST art. 22 / Ley 6ª/1981 |
 | `auxilio_transporte_mensual` | 200.000 / 249.095 | 2025 / desde 2026 | decreto anual (verificar) |
 | `estrategia_clasificacion_extras` | `presupuesto_quincenal` | vigente | decisión de negocio |
@@ -229,6 +236,18 @@ cuyo factor es la suma de componentes independientes:
 | TIEMPO FESTIVO EXTRA (extra diurna) | 1 + extra_diurna + recargo_dominical | 2.05 → 2.15 |
 | TIEMPO EXTRA NOCTURNO DOMINICAL/FESTIVO | 1 + extra_nocturna + recargo_dominical | 2.55 → 2.65 |
 | AUXILIO DE TRANSPORTE | auxilio_transporte_mensual / 2 | — |
+| AUXILIO DE TRANSPORTE (prorrateado) | auxilio_transporte_mensual × horas laboradas / divisor_hora_ordinaria | — |
+
+El auxilio se paga quincenal plano por defecto. La marca por empleado y quincena
+`auxilio_por_dias_laborados` lo prorratea sobre **lo laborado** (los minutos no-extra,
+topados al presupuesto): pesos del mes × horas / horas del mes. Marcada, se paga aunque el
+empleado esté `incapacitado` u `ocasional`, que normalmente lo quitan entero. Con la
+quincena completa el prorrateo da el mismo valor que el plano.
+
+La misma base alimenta la marca `quincena_incompleta`, que paga el TIEMPO ORDINARIO sobre lo
+laborado en vez del presupuesto completo. Las horas festivas y nocturnas **sí** cuentan en
+esa base (así lo liquida la contadora y así es coherente con la quincena completa, cuyo
+presupuesto también las incluye); las extras no, porque su factor ya trae la `hora_base`.
 
 Cada componente se resuelve contra la vigencia de la **fecha del tramo** (no la fecha del
 sistema ni la de liquidación).

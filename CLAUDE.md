@@ -17,6 +17,18 @@ la fecha de liquidación. Motivo: la ley colombiana cambia de forma escalonada (
 2026 hay dos cambios con fechas distintas: dominical 80→90% el 1-jul y jornada 44→42 h el
 15-jul).
 
+Dos avisos que ya costaron un error de dinero:
+
+- **`horas_quincena` y `divisor_hora_ordinaria` se mueven SIEMPRE juntos.** El salario
+  quincenal es `salario/2` y el motor lo paga como `horas_quincena × (salario / divisor)`,
+  así que debe cumplirse `divisor == 2 × horas_quincena` (110/220 hasta el 14-jul-2026,
+  105/210 desde el 15-jul). Cambiar uno solo descuadra el tiempo ordinario sin que nada
+  falle. Lo verifica `incoherencias_horas_quincena()` y se avisa en Configuración.
+- **`sembrar_parametros` es idempotente POR CÓDIGO**, así que solo agrega códigos nuevos:
+  si se cambia la vigencia de un parámetro ya sembrado, las bases existentes NO se enteran.
+  Ese cambio exige una **migración de datos** (plantilla:
+  `c1b7e40a9f38_horas_quincena_105_desde_jul_2026.py`).
+
 ## Arquitectura (hexagonal)
 
 ```
@@ -85,6 +97,22 @@ dominio  ←  aplicacion  ←  infraestructura
   digitado en el turno) no pagan recargo dominical/festivo ni nocturno — las cubre el
   salario — y solo el excedente sobre N se reconoce, como hora extra con su tipo de día
   real. La clasificación la hace la segmentación; el clasificador de extras no la toca.
+- **Lo laborado (base compartida):** todos los minutos trabajados que **no** sean extra
+  —ordinarios, festivos y nocturnos por igual—, topados al presupuesto de la quincena. Es la
+  base de las dos marcas de abajo. Las horas festivas entran porque en la quincena completa
+  el presupuesto también las incluye (la planilla liquida las 105 h de TIEMPO ORDINARIO con
+  las festivas dentro, y encima paga TIEMPO FESTIVO ×1.90); excluirlas solo al prorratear le
+  pagaría menos al empleado parcial que al completo por la misma hora. Las extras no entran:
+  se pagan por encima del presupuesto y su factor ya trae la `hora_base`.
+- **Quincena incompleta (marca por empleado y quincena):** el tiempo ordinario se paga sobre
+  «lo laborado» en vez del presupuesto completo. No suprime nada más: dominicales, recargos
+  nocturnos y extras se siguen liquidando en sus propias líneas.
+- **Auxilio prorrateado (marca por empleado y quincena):** el auxilio de transporte se paga
+  en proporción a lo laborado, `mensual × horas / divisor_hora_ordinaria`, en vez del
+  quincenal plano. Es la cuenta de la contadora (`mensual/30 × días`, con `días = horas /
+  jornada`) reducida a horas. La marca **manda** sobre `incapacitado`/`ocasional`: marcada,
+  el auxilio se paga aunque esos estados lo quiten entero. Con la quincena completa da el
+  mismo valor que el plano. Referencia verificada: `tests/dominio/golden/test_golden_lorena.py`.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).

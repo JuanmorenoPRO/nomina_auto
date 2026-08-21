@@ -181,6 +181,44 @@ def test_auxilio_de_transporte_quincenal():
     assert valor(liq, "auxilio_transporte") == Decimal(124_548)
 
 
+def test_auxilio_prorrateado_paga_en_proporcion_a_lo_laborado():
+    """El empleado solo alcanzó a trabajar parte de la quincena: el auxilio se paga
+    en proporción a lo laborado, `mensual × horas / horas del mes`."""
+    turnos = [turno("2026-05-04", "06:00", "14:00")]  # lunes, 8 h ordinarias
+    tramos = segmentar_turnos(turnos, PARAMETROS, CALENDARIO)
+    clasificados = clasificar_extras(tramos, PARAMETROS, date(2026, 5, 1))
+    liq = liquidar(clasificados, SALARIO, PARAMETROS, date(2026, 5, 1),
+                   incluir_auxilio_transporte=True, auxilio_prorrateado=True)
+    # 249.095 × 8 / 220 = 9.058 exactos
+    assert valor(liq, "auxilio_transporte") == Decimal(9_058)
+    concepto = next(c for c in liq.conceptos if c.codigo == "auxilio_transporte")
+    assert concepto.componentes == {"horas_laboradas": Decimal(8)}
+
+
+def test_auxilio_prorrateado_de_quincena_completa_es_el_quincenal():
+    """Invariante: al agotar el presupuesto de la quincena, el prorrateo da el mismo
+    valor que el auxilio plano, así que marcar la casilla de más no cambia nada."""
+    # 14 turnos de 8 h = 112 h: las 2 h que exceden las 110 se clasifican extra,
+    # así que la base no-extra queda exactamente en el presupuesto.
+    turnos = [turno(f"2026-05-{d:02d}", "06:00", "14:00") for d in range(4, 16)]
+    turnos += [turno("2026-05-18", "06:00", "14:00"), turno("2026-05-19", "06:00", "14:00")]
+    tramos = segmentar_turnos(turnos, PARAMETROS, CALENDARIO)
+    clasificados = clasificar_extras(tramos, PARAMETROS, date(2026, 5, 1))
+    liq = liquidar(clasificados, SALARIO, PARAMETROS, date(2026, 5, 1),
+                   incluir_auxilio_transporte=True, auxilio_prorrateado=True)
+    assert valor(liq, "auxilio_transporte") == Decimal(124_548)
+
+
+def test_auxilio_prorrateado_sin_horas_laboradas_es_cero():
+    """Cero horas: el auxilio es 0, pero la línea se emite igual (con las horas a la
+    vista) para que el cero quede explicado en el reporte."""
+    liq = liquidar([], SALARIO, PARAMETROS, date(2026, 5, 1),
+                   incluir_auxilio_transporte=True, auxilio_prorrateado=True)
+    assert valor(liq, "auxilio_transporte") == Decimal(0)
+    concepto = next(c for c in liq.conceptos if c.codigo == "auxilio_transporte")
+    assert concepto.componentes == {"horas_laboradas": Decimal(0)}
+
+
 def test_quincena_incompleta_paga_solo_horas_trabajadas():
     """Marcado a mano que el empleado no laboró toda la quincena (incapacidad,
     ausencia, ingreso/retiro a mitad de periodo): las ordinarias se pagan sobre
@@ -203,10 +241,15 @@ def test_quincena_incompleta_paga_solo_horas_trabajadas():
     assert valor(incompleta, "tiempo_ordinario") == Decimal(80_000)  # 8 h × 10.000
 
 
-def test_quincena_incompleta_no_cuenta_dos_veces_las_horas_festivas():
-    """Un tramo festivo/dominical ya se paga completo por su cuenta (su factor
-    incluye `hora_base`): con quincena incompleta, esas horas NO deben sumar
-    también al balde de tiempo_ordinario, o se pagarían dos veces."""
+def test_quincena_incompleta_cuenta_tambien_las_horas_festivas():
+    """Con la quincena incompleta el tiempo ordinario cubre TODAS las horas
+    laboradas, festivas incluidas, y el festivo se paga aparte con su factor.
+
+    Es como lo liquida la contadora (hoja HERNAN 1-15 de agosto: 49 h trabajadas →
+    49 h de TIEMPO ORDINARIO, con 14 h festivas dentro, más TIEMPO FESTIVO ×1.90),
+    y es lo coherente con la quincena completa, donde el presupuesto de horas ya
+    incluye las festivas: excluirlas solo al prorratear le pagaría menos al empleado
+    parcial que al completo por la misma hora festiva."""
     turnos = [
         turno("2026-03-02", "06:00", "14:00"),  # lunes, 8 h diurnas ordinarias
         turno("2026-03-08", "06:00", "14:00"),  # domingo, 8 h dominicales
@@ -217,9 +260,9 @@ def test_quincena_incompleta_no_cuenta_dos_veces_las_horas_festivas():
         clasificados, SALARIO, PARAMETROS, date(2026, 3, 1),
         incluir_auxilio_transporte=False, quincena_completa=False,
     )
-    assert valor(liq, "tiempo_ordinario") == Decimal(80_000)  # solo el lunes
+    assert valor(liq, "tiempo_ordinario") == Decimal(160_000)  # 16 h: lunes Y domingo
     assert valor(liq, "festivo_diurno") == Decimal(144_000)  # 8 h × 1,80
-    assert liq.total_devengado == Decimal(224_000)
+    assert liq.total_devengado == Decimal(304_000)
 
 
 def test_nocturna_dentro_de_jornada_solo_paga_recargo():
@@ -285,3 +328,17 @@ def test_jornada_ordinaria_cuenta_como_hora_trabajada_si_la_quincena_es_incomple
     )
     assert valor(liq, "tiempo_ordinario") == Decimal(80_000)  # 8 h × 10.000
     assert liq.total_devengado == Decimal(80_000)
+
+
+def test_tiempo_ordinario_de_agosto_2026_es_salario_medio():
+    """Con el par vigente desde el 15-jul-2026 (105 h / divisor 210), el tiempo
+    ordinario de una quincena completa da exactamente salario/2.
+
+    Fija el valor que estaba mal en la base del usuario: con `horas_quincena` = 110
+    quedado y el divisor ya en 210, pagaba 1.152.381 — 52.381 de más por empleado.
+    """
+    liq = liquidar([], SALARIO, PARAMETROS, date(2026, 8, 1))
+    assert valor(liq, "tiempo_ordinario") == SALARIO / 2 == Decimal(1_100_000)
+    # Y antes del corte, con el par viejo (110 h / divisor 220), también da salario/2.
+    liq_antes = liquidar([], SALARIO, PARAMETROS, date(2026, 7, 1))
+    assert valor(liq_antes, "tiempo_ordinario") == SALARIO / 2

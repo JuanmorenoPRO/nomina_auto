@@ -47,6 +47,30 @@ function paresIniciales(dias: string[], turnos: Turno[]): Record<string, Par[]> 
   return mapa;
 }
 
+/** Estados del empleado editables desde la tarjeta: los mismos de «Unidades y
+ *  empleados», aquí para no tener que cambiar de pestaña a mitad de la digitación.
+ *  Cada uno se guarda solo, con un PATCH que lleva únicamente su clave. */
+const ESTADOS_EMPLEADO = [
+  { campo: "activo", etiqueta: "Activo", titulo: "Un empleado inactivo no entra en la liquidación." },
+  {
+    campo: "incapacitado",
+    etiqueta: "Incapacitado",
+    titulo: "Incapacitado: sin auxilio de transporte, salvo que se prorratee por lo laborado.",
+  },
+  {
+    campo: "ocasional",
+    etiqueta: "Ocasional",
+    titulo: "Ocasional: sin auxilio de transporte, salvo que se prorratee por lo laborado.",
+  },
+] as const;
+
+type CampoEstado = (typeof ESTADOS_EMPLEADO)[number]["campo"];
+
+const TITULO_AUXILIO_POR_DIAS =
+  "El auxilio de transporte se paga en proporción a las horas laboradas de la quincena " +
+  "(auxilio mensual × horas ÷ horas del mes), en vez del auxilio quincenal completo. " +
+  "Marcado, se paga aunque el empleado esté incapacitado u ocasional.";
+
 const TITULO_JORNADA_ORDINARIA =
   "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
   "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
@@ -76,6 +100,7 @@ export function PreviaTurnosEmpleado({
   soloLectura,
   alCerrar,
   alGuardado,
+  alActualizarEmpleado,
 }: {
   empleado: Empleado;
   unidad: Unidad;
@@ -86,6 +111,9 @@ export function PreviaTurnosEmpleado({
   soloLectura: boolean;
   alCerrar: () => void;
   alGuardado: () => void;
+  /** Devuelve al padre el empleado ya actualizado tras cambiar uno de sus estados,
+   *  para que la grilla y esta tarjeta no queden mostrando datos distintos. */
+  alActualizarEmpleado: (empleado: Empleado) => void;
 }) {
   const [pares, setPares] = useState<Record<string, Par[]>>(() =>
     paresIniciales(dias, turnos),
@@ -96,6 +124,9 @@ export function PreviaTurnosEmpleado({
   const [guardandoIncompleta, setGuardandoIncompleta] = useState(false);
   const [sinExtras, setSinExtras] = useState(false);
   const [guardandoSinExtras, setGuardandoSinExtras] = useState(false);
+  const [auxilioPorDias, setAuxilioPorDias] = useState(false);
+  const [guardandoAuxilio, setGuardandoAuxilio] = useState(false);
+  const [guardandoEstado, setGuardandoEstado] = useState<CampoEstado | null>(null);
 
   useEffect(() => {
     api.ajustesQuincena
@@ -103,9 +134,24 @@ export function PreviaTurnosEmpleado({
       .then((a) => {
         setQuincenaIncompleta(a.quincena_incompleta);
         setSinExtras(a.sin_extras);
+        setAuxilioPorDias(a.auxilio_por_dias_laborados);
       })
       .catch((e) => setError(e.message));
   }, [empleado.id, periodo.id]);
+
+  /** Cambia uno de los estados del empleado (activo/incapacitado/ocasional). El
+   *  PATCH lleva solo esa clave y el empleado actualizado sube al padre. */
+  async function marcarEstado(campo: CampoEstado, valor: boolean) {
+    setError("");
+    setGuardandoEstado(campo);
+    try {
+      alActualizarEmpleado(await api.empleados.actualizar(empleado.id, { [campo]: valor }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoEstado(null);
+    }
+  }
 
   async function marcarQuincenaIncompleta(valor: boolean) {
     setError("");
@@ -130,6 +176,21 @@ export function PreviaTurnosEmpleado({
       setError((err as Error).message);
     } finally {
       setGuardandoSinExtras(false);
+    }
+  }
+
+  async function marcarAuxilioPorDias(valor: boolean) {
+    setError("");
+    setGuardandoAuxilio(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, {
+        auxilio_por_dias_laborados: valor,
+      });
+      setAuxilioPorDias(valor);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoAuxilio(false);
     }
   }
 
@@ -266,6 +327,7 @@ export function PreviaTurnosEmpleado({
     [pares, dias],
   );
 
+
   async function guardar() {
     setError("");
     // Normalizar y validar todos los pares con contenido.
@@ -345,6 +407,12 @@ export function PreviaTurnosEmpleado({
           </div>
           <div>
             <span className="previa-etiqueta">NOMBRE Y APELLIDO</span> {empleado.nombre}
+            {empleado.incapacitado && (
+              <span className="marca-incapacitado" title="Incapacitado">
+                {" "}
+                ✚
+              </span>
+            )}
           </div>
           <div>
             <span className="previa-etiqueta">C.C.</span> {empleado.documento}
@@ -353,6 +421,21 @@ export function PreviaTurnosEmpleado({
             <span className="previa-etiqueta">MES</span> del {periodo.fecha_inicio} al{" "}
             {periodo.fecha_fin}
           </div>
+        </div>
+
+        <div className="previa-estados">
+          <span className="previa-etiqueta">ESTADO DEL EMPLEADO</span>
+          {ESTADOS_EMPLEADO.map(({ campo, etiqueta, titulo }) => (
+            <label key={campo} className="casilla" title={titulo}>
+              <input
+                type="checkbox"
+                checked={empleado[campo]}
+                disabled={guardandoEstado !== null}
+                onChange={(e) => marcarEstado(campo, e.target.checked)}
+              />
+              {etiqueta}
+            </label>
+          ))}
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -514,7 +597,7 @@ export function PreviaTurnosEmpleado({
               disabled={soloLectura || guardandoIncompleta}
               onChange={(e) => marcarQuincenaIncompleta(e.target.checked)}
             />
-            No laboró todas las horas de la quincena (liquidar sobre lo trabajado)
+            No laboró todas las horas de la quincena: pagar el tiempo ordinario sobre las horas trabajadas (festivas y nocturnas incluidas) en vez del presupuesto completo
           </label>
           <label className="casilla">
             <input
@@ -525,6 +608,16 @@ export function PreviaTurnosEmpleado({
             />
             No calcular horas extra: solo cobrar extra si supera las horas de la quincena
             (concentró horas para descansar otros días)
+          </label>
+          <label className="casilla" title={TITULO_AUXILIO_POR_DIAS}>
+            <input
+              type="checkbox"
+              checked={auxilioPorDias}
+              disabled={soloLectura || guardandoAuxilio}
+              onChange={(e) => marcarAuxilioPorDias(e.target.checked)}
+            />
+            Calcular el auxilio de transporte con lo laborado (
+            {(totalMinutos / 60).toFixed(1)} h)
           </label>
         </div>
         <div className="fila" style={{ justifyContent: "flex-end" }}>

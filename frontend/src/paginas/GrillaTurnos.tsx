@@ -50,6 +50,14 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
     if (unidadId) api.empleados.listar(unidadId).then(setEmpleados).catch((e) => setError(e.message));
   }, [unidadId]);
 
+  /** Reemplaza un empleado ya cargado tras editarlo desde la tarjeta. Hay que tocar
+   *  las dos piezas de estado: la lista alimenta la grilla y `empleadoPrevia` la
+   *  tarjeta abierta, y son objetos distintos. */
+  const actualizarEmpleado = useCallback((emp: Empleado) => {
+    setEmpleados((prev) => prev.map((e) => (e.id === emp.id ? emp : e)));
+    setEmpleadoPrevia((prev) => (prev && prev.id === emp.id ? emp : prev));
+  }, []);
+
   useEffect(() => {
     recargarTurnos().catch((e) => setError(e.message));
   }, [recargarTurnos]);
@@ -258,6 +266,11 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
                             🗂
                           </button>
                           {emp.nombre}
+                          {emp.incapacitado && (
+                            <span className="marca-incapacitado" title="Incapacitado">
+                              ✚
+                            </span>
+                          )}
                         </span>
                       </td>
                       {dias.map((d, col) => (
@@ -303,6 +316,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
               soloLectura={soloLectura}
               alCerrar={() => setEmpleadoPrevia(null)}
               alGuardado={recargarTurnos}
+              alActualizarEmpleado={actualizarEmpleado}
             />
           )}
         </>
