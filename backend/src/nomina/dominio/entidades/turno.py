@@ -15,11 +15,25 @@ class Turno:
     el turno cruza medianoche y termina el día siguiente (hora_fin == hora_inicio
     equivale a 24 horas exactas). Un día con varios turnos es un turno partido;
     un día sin turnos es descanso.
+
+    `minutos_jornada_ordinaria` marca el turno como «jornada ordinaria»: el
+    empleado no trabajó realmente ese domingo/festivo, el turno se registró para
+    cuadrar las horas de la quincena. Sus primeros N minutos son horas ordinarias
+    puras (cubiertas por el salario base: ni recargo dominical/festivo ni
+    nocturno) y solo el excedente sobre N se reconoce, como hora extra con su
+    tipo de día y franja reales. `None` = turno normal.
     """
 
     fecha: date
     hora_inicio: time
     hora_fin: time
+    minutos_jornada_ordinaria: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.minutos_jornada_ordinaria is not None and self.minutos_jornada_ordinaria <= 0:
+            raise ValueError(
+                f"La jornada ordinaria debe ser positiva: {self.minutos_jornada_ordinaria}"
+            )
 
     def intervalo(self) -> tuple[datetime, datetime]:
         inicio = datetime.combine(self.fecha, self.hora_inicio, tzinfo=BOGOTA)

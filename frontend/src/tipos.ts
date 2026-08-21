@@ -85,6 +85,11 @@ export interface Turno {
   hora_inicio: string;
   hora_fin: string;
   cruza_medianoche: boolean;
+  /** Minutos de «jornada ordinaria»: el turno se registró para cuadrar las
+   *  horas de la quincena, no porque se trabajara. Esos primeros minutos no
+   *  pagan recargo festivo ni nocturno; solo el excedente cuenta como extra.
+   *  null = turno normal. */
+  minutos_jornada_ordinaria: number | null;
 }
 
 export interface Parametro {

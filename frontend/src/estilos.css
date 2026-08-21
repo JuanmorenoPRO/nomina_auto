@@ -171,10 +171,37 @@ table.grilla td .chip {
   padding: 2px 5px;
   margin-bottom: 3px;
   white-space: nowrap;
+  flex-wrap: wrap;
 }
 table.grilla td .chip.nocturno { background: #ded9f7; }
+/* Turno marcado como jornada ordinaria: solo cuadra horas, no se trabajó. */
+table.grilla td .chip.jornada-ordinaria { background: #fdebc8; }
 table.grilla td .chip button {
   border: none; background: none; cursor: pointer; color: #64748b; padding: 0 2px;
+}
+/* Hora + botón eliminar en una línea; la marca de jornada baja a la siguiente. */
+table.grilla td .chip .chip-horas {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+table.grilla td .chip .marca-jornada {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #475569;
+}
+table.grilla td .chip .marca-jornada label {
+  display: flex; align-items: center; gap: 2px; cursor: pointer;
+}
+table.grilla td .chip .marca-jornada input[type="checkbox"] {
+  width: auto; margin: 0; border: none; padding: 0;
+}
+table.grilla td .chip .horas-jornada {
+  width: 32px; text-align: right; padding: 0 2px; font-size: 10px;
 }
 table.grilla td input {
   width: 100%;
@@ -278,3 +305,19 @@ table.tarjeta-turnos .agregar-par {
 table.tarjeta-turnos .agregar-par:hover { background: #e0edf9; }
 table.tarjeta-turnos .atenuado { color: #94a3b8; }
 table.tarjeta-turnos td.celda-descanso { white-space: nowrap; }
+
+/* Columna «Jornada ord.» de la tarjeta por empleado: turno registrado solo para
+   cuadrar las horas de la quincena. */
+table.tarjeta-turnos td.celda-jornada { min-width: 74px; }
+table.tarjeta-turnos td.celda-jornada .linea-hora { min-height: 22px; }
+table.tarjeta-turnos .linea-hora input[type="checkbox"] {
+  width: auto;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+table.tarjeta-turnos .linea-hora input.horas-jornada {
+  width: 38px;
+  text-align: right;
+}

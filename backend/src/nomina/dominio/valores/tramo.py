@@ -22,6 +22,16 @@ class Tramo:
 
     Un tramo nunca cruza medianoche ni un límite de jornada nocturna,
     por lo que su fecha, franja y tipo de día son únicos.
+
+    `jornada_ordinaria` indica que el tramo viene de un turno marcado como
+    jornada ordinaria y que YA quedó clasificado en la segmentación; el
+    clasificador de extras no lo toca. Combinado con `es_extra`:
+
+    | jornada_ordinaria | es_extra | significado          | pago adicional        |
+    |-------------------|----------|----------------------|-----------------------|
+    | False             | —        | tramo normal         | lo decide la estrategia |
+    | True              | False    | dentro del umbral    | ninguno (lo cubre el salario) |
+    | True              | True     | excedente del umbral | extra + su tipo de día real |
     """
 
     inicio: datetime
@@ -29,6 +39,7 @@ class Tramo:
     franja: Franja
     tipo_dia: TipoDia
     es_extra: bool = False
+    jornada_ordinaria: bool = False
 
     def __post_init__(self) -> None:
         if self.fin <= self.inicio:

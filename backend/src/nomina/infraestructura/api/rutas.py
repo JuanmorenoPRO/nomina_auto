@@ -9,6 +9,7 @@ Toda escritura sensible queda en la auditoría append-only.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Annotated
@@ -417,11 +418,50 @@ def registrar_turno(datos: schemas.TurnoCrear, usuario: UsuarioOperador, session
         periodos=RepositorioPeriodosSQL(session),
         turnos=RepositorioTurnosSQL(session),
     )
-    registrado = caso.ejecutar(datos.empleado_id, datos.fecha, datos.hora_inicio, datos.hora_fin)
+    registrado = caso.ejecutar(
+        datos.empleado_id, datos.fecha, datos.hora_inicio, datos.hora_fin,
+        minutos_jornada_ordinaria=datos.minutos_jornada_ordinaria,
+    )
     auditar(session, usuario.email, "crear", "turno", str(registrado.id),
             despues={"empleado_id": str(datos.empleado_id), "fecha": datos.fecha.isoformat(),
-                     "hora_inicio": str(datos.hora_inicio), "hora_fin": str(datos.hora_fin)})
+                     "hora_inicio": str(datos.hora_inicio), "hora_fin": str(datos.hora_fin),
+                     "minutos_jornada_ordinaria": datos.minutos_jornada_ordinaria})
     return traductores.turno_a_schema(registrado)
+
+
+@router.patch("/turnos/{turno_id}/jornada-ordinaria", response_model=schemas.TurnoRespuesta)
+def marcar_jornada_ordinaria(
+    turno_id: UUID,
+    datos: schemas.TurnoJornadaOrdinaria,
+    usuario: UsuarioOperador,
+    session: Sesion,
+):
+    """Marca (o desmarca, con `null`) la jornada ordinaria de un turno existente.
+
+    En la grilla el turno se crea escribiendo las horas y la casilla se marca
+    después, por eso es un PATCH y no parte del POST.
+    """
+    repo = RepositorioTurnosSQL(session)
+    registrado = repo.obtener(turno_id)
+    if registrado is None:
+        raise HTTPException(404, "No existe el turno")
+
+    periodo = RepositorioPeriodosSQL(session).que_contiene(registrado.turno.fecha)
+    if periodo is None or periodo.estado is not EstadoPeriodo.ABIERTO:
+        raise HTTPException(400, "El periodo del turno no está abierto: reábralo para corregirlo")
+
+    antes = registrado.turno.minutos_jornada_ordinaria
+    actualizado = replace(
+        registrado,
+        turno=replace(
+            registrado.turno, minutos_jornada_ordinaria=datos.minutos_jornada_ordinaria
+        ),
+    )
+    repo.guardar(actualizado)
+    auditar(session, usuario.email, "actualizar", "turno", str(turno_id),
+            antes={"minutos_jornada_ordinaria": antes},
+            despues={"minutos_jornada_ordinaria": datos.minutos_jornada_ordinaria})
+    return traductores.turno_a_schema(actualizado)
 
 
 @router.delete("/turnos/{turno_id}", status_code=204)

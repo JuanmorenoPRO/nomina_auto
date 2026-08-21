@@ -80,6 +80,11 @@ class TurnoModel(Base):
     fecha: Mapped[date] = mapped_column(Date, index=True)  # día en que INICIA
     hora_inicio: Mapped[time] = mapped_column(Time)
     hora_fin: Mapped[time] = mapped_column(Time)  # <= inicio ⇒ cruza medianoche
+    # «Jornada ordinaria»: el turno se registró para cuadrar las horas de la
+    # quincena, no porque se trabajara. NULL = turno normal. Si trae valor, esos
+    # primeros minutos no pagan recargo dominical/festivo ni nocturno y solo el
+    # excedente se reconoce como hora extra.
+    minutos_jornada_ordinaria: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ParametroLegalModel(Base):

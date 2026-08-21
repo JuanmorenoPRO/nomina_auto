@@ -7,10 +7,15 @@ Un turno se parte en tramos homogéneos por cortes sucesivos:
  3. tipo de día calendario (festivo > dominical > ordinario).
 
 Invariante: la suma de los minutos de los tramos = duración del turno, siempre.
+
+Un turno marcado como «jornada ordinaria» (`Turno.minutos_jornada_ordinaria`)
+sale de aquí ya clasificado: sus primeros N minutos quedan como jornada
+ordinaria pura y el excedente como hora extra. Ver `_aplicar_jornada_ordinaria`.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 
 from nomina.dominio.entidades.turno import Turno
@@ -35,6 +40,30 @@ def _franja(momento: datetime, parametros: ProveedorParametros) -> Franja:
     else:
         es_nocturna = inicio_noct <= t < fin_noct
     return Franja.NOCTURNA if es_nocturna else Franja.DIURNA
+
+
+def _aplicar_jornada_ordinaria(tramos: list[Tramo], minutos: int) -> list[Tramo]:
+    """Clasifica los tramos de un turno marcado como jornada ordinaria.
+
+    Los primeros `minutos` (en orden cronológico) son jornada ordinaria pura —
+    el empleado no trabajó, el turno solo cuadra las horas de la quincena — y el
+    excedente es hora extra, conservando su franja y tipo de día reales. Si el
+    umbral cae dentro de un tramo, el tramo se parte.
+    """
+    resultado: list[Tramo] = []
+    acumulado = 0
+    for tramo in tramos:
+        restante = minutos - acumulado
+        acumulado += tramo.minutos
+        if restante <= 0:
+            resultado.append(replace(tramo, jornada_ordinaria=True, es_extra=True))
+        elif tramo.minutos <= restante:
+            resultado.append(replace(tramo, jornada_ordinaria=True))
+        else:
+            ordinario, extra = tramo.partir_en(restante)
+            resultado.append(replace(ordinario, jornada_ordinaria=True))
+            resultado.append(replace(extra, jornada_ordinaria=True, es_extra=True))
+    return resultado
 
 
 def segmentar(
@@ -62,7 +91,9 @@ def segmentar(
                 tipo_dia=calendario.tipo_dia(ini.date()),
             )
         )
-    return tramos
+    if turno.minutos_jornada_ordinaria is None:
+        return tramos
+    return _aplicar_jornada_ordinaria(tramos, turno.minutos_jornada_ordinaria)
 
 
 def segmentar_turnos(

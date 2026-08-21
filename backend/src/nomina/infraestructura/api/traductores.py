@@ -69,6 +69,7 @@ def turno_a_schema(t: TurnoRegistrado) -> TurnoRespuesta:
         hora_inicio=t.turno.hora_inicio,
         hora_fin=t.turno.hora_fin,
         cruza_medianoche=t.turno.hora_fin <= t.turno.hora_inicio,
+        minutos_jornada_ordinaria=t.turno.minutos_jornada_ordinaria,
     )
 
 

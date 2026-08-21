@@ -80,6 +80,11 @@ dominio  ←  aplicacion  ←  infraestructura
   1-jul-2026 y a 100% el 1-jul-2027, Ley 2466/2025).
 - **Vigencia:** rango de fechas `[vigente_desde, vigente_hasta]` en que un valor de
   parámetro legal aplica. Las vigencias de un mismo parámetro no se solapan.
+- **Jornada ordinaria (marca por turno):** turno registrado solo para cuadrar las horas
+  de la quincena, no porque se trabajara. Sus primeras N horas (`minutos_jornada_ordinaria`,
+  digitado en el turno) no pagan recargo dominical/festivo ni nocturno — las cubre el
+  salario — y solo el excedente sobre N se reconoce, como hora extra con su tipo de día
+  real. La clasificación la hace la segmentación; el clasificador de extras no la toca.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).

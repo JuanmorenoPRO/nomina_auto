@@ -3,8 +3,11 @@ import { api } from "../api";
 import type { Empleado, Festivo, Periodo, Turno, Unidad } from "../tipos";
 import {
   DIAS_SEMANA,
+  HORAS_JORNADA_ORDINARIA_SUGERIDA,
   diasDelPeriodo,
   fechaLocal,
+  horasAMinutos,
+  minutosAHoras,
   minutosDeTurno,
   normalizarHora,
 } from "../turnos-util";
@@ -89,6 +92,18 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
           hora_inicio: inicio,
           hora_fin: fin,
         });
+        await recargarTurnos();
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    },
+    [recargarTurnos],
+  );
+
+  const marcarJornadaOrdinaria = useCallback(
+    async (id: string, minutos: number | null) => {
+      try {
+        await api.turnos.jornadaOrdinaria(id, minutos);
         await recargarTurnos();
       } catch (e) {
         setError((e as Error).message);
@@ -212,6 +227,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
                           alActivar={activar}
                           alAgregar={agregarTurno}
                           alEliminar={eliminarTurno}
+                          alMarcarJornada={marcarJornadaOrdinaria}
                         />
                       ))}
                       <td className={`total${filaActiva ? " fila-activa" : ""}`}>
@@ -258,6 +274,7 @@ type CeldaTurnoProps = {
   alActivar: (fila: number, col: number) => void;
   alAgregar: (empleadoId: string, fecha: string, texto: string) => void;
   alEliminar: (id: string) => void;
+  alMarcarJornada: (id: string, minutos: number | null) => void;
 };
 
 // `memo`: con props estables (callbacks + primitivos), al cambiar la celda
@@ -275,6 +292,7 @@ const CeldaTurno = memo(function CeldaTurno({
   alActivar,
   alAgregar,
   alEliminar,
+  alMarcarJornada,
 }: CeldaTurnoProps) {
   const [texto, setTexto] = useState("");
   const clases = [
@@ -290,11 +308,20 @@ const CeldaTurno = memo(function CeldaTurno({
       onClick={() => alActivar(fila, col)}
     >
       {turnos.map((t) => (
-        <span key={t.id} className={`chip${t.cruza_medianoche ? " nocturno" : ""}`}>
-          {t.hora_inicio}–{t.hora_fin}
-          {!soloLectura && (
-            <button title="Eliminar turno" onClick={() => alEliminar(t.id)}>×</button>
-          )}
+        <span
+          key={t.id}
+          className={`chip${t.cruza_medianoche ? " nocturno" : ""}${
+            t.minutos_jornada_ordinaria !== null ? " jornada-ordinaria" : ""
+          }`}
+        >
+          <span className="chip-horas">
+            {normalizarHora(t.hora_inicio) ?? t.hora_inicio}–
+            {normalizarHora(t.hora_fin) ?? t.hora_fin}
+            {!soloLectura && (
+              <button title="Eliminar turno" onClick={() => alEliminar(t.id)}>×</button>
+            )}
+          </span>
+          {!soloLectura && <MarcaJornadaOrdinaria turno={t} alMarcar={alMarcarJornada} />}
         </span>
       ))}
       {!soloLectura && (
@@ -313,3 +340,61 @@ const CeldaTurno = memo(function CeldaTurno({
     </td>
   );
 });
+
+
+const TITULO_JORNADA_ORDINARIA =
+  "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
+  "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
+  "ni nocturno; solo el excedente se reconoce, como hora extra.";
+
+/** Casilla «jornada ordinaria» de un turno, con el umbral en horas. */
+function MarcaJornadaOrdinaria({
+  turno,
+  alMarcar,
+}: {
+  turno: Turno;
+  alMarcar: (id: string, minutos: number | null) => void;
+}) {
+  const marcado = turno.minutos_jornada_ordinaria !== null;
+  const guardadas =
+    turno.minutos_jornada_ordinaria === null ? "" : minutosAHoras(turno.minutos_jornada_ordinaria);
+  const [horas, setHoras] = useState(guardadas);
+
+  // El valor lo manda el servidor: al recargar los turnos se resincroniza.
+  useEffect(() => setHoras(guardadas), [guardadas]);
+
+  function confirmar() {
+    const minutos = horasAMinutos(horas);
+    if (minutos === null) {
+      setHoras(guardadas); // entrada inválida: se descarta
+      return;
+    }
+    if (minutos !== turno.minutos_jornada_ordinaria) alMarcar(turno.id, minutos);
+  }
+
+  return (
+    <span className="marca-jornada" title={TITULO_JORNADA_ORDINARIA}>
+      <label>
+        <input
+          type="checkbox"
+          checked={marcado}
+          onChange={(e) =>
+            alMarcar(turno.id, e.target.checked ? HORAS_JORNADA_ORDINARIA_SUGERIDA * 60 : null)
+          }
+        />
+        ord.
+      </label>
+      {marcado && (
+        <input
+          className="horas-jornada"
+          value={horas}
+          inputMode="decimal"
+          aria-label="Horas de jornada ordinaria"
+          onChange={(e) => setHoras(e.target.value)}
+          onBlur={confirmar}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        />
+      )}
+    </span>
+  );
+}

@@ -40,3 +40,19 @@ export function minutosDeTurno(t: Pick<Turno, "hora_inicio" | "hora_fin">): numb
   const fin = hf * 60 + mf;
   return fin <= inicio ? fin + 24 * 60 - inicio : fin - inicio;
 }
+
+/** Horas sugeridas al marcar «jornada ordinaria»: es solo el valor inicial del
+ *  campo — el umbral real se guarda en cada turno. */
+export const HORAS_JORNADA_ORDINARIA_SUGERIDA = 7;
+
+/** "7", "7,5" o "7.5" → minutos enteros; null si no es un número positivo. */
+export function horasAMinutos(texto: string): number | null {
+  const horas = Number(texto.trim().replace(",", "."));
+  if (!Number.isFinite(horas) || horas <= 0 || horas > 24) return null;
+  return Math.round(horas * 60);
+}
+
+/** Minutos → horas para mostrar en el campo ("420" → "7", "450" → "7.5"). */
+export function minutosAHoras(minutos: number): string {
+  return String(Number((minutos / 60).toFixed(2)));
+}

@@ -232,6 +232,7 @@ class RepositorioTurnosSQL:
                 fecha=turno.turno.fecha,
                 hora_inicio=turno.turno.hora_inicio,
                 hora_fin=turno.turno.hora_fin,
+                minutos_jornada_ordinaria=turno.turno.minutos_jornada_ordinaria,
             )
         )
         self.session.flush()
@@ -243,7 +244,12 @@ class RepositorioTurnosSQL:
         return TurnoRegistrado(
             id=m.id,
             empleado_id=m.empleado_id,
-            turno=Turno(fecha=m.fecha, hora_inicio=m.hora_inicio, hora_fin=m.hora_fin),
+            turno=Turno(
+                fecha=m.fecha,
+                hora_inicio=m.hora_inicio,
+                hora_fin=m.hora_fin,
+                minutos_jornada_ordinaria=m.minutos_jornada_ordinaria,
+            ),
         )
 
     def eliminar(self, id: UUID) -> bool:
@@ -266,7 +272,12 @@ class RepositorioTurnosSQL:
             TurnoRegistrado(
                 id=m.id,
                 empleado_id=m.empleado_id,
-                turno=Turno(fecha=m.fecha, hora_inicio=m.hora_inicio, hora_fin=m.hora_fin),
+                turno=Turno(
+                    fecha=m.fecha,
+                    hora_inicio=m.hora_inicio,
+                    hora_fin=m.hora_fin,
+                    minutos_jornada_ordinaria=m.minutos_jornada_ordinaria,
+                ),
             )
             for m in filas
         ]

@@ -29,7 +29,12 @@ class RegistrarTurno:
     turnos: RepositorioTurnos
 
     def ejecutar(
-        self, empleado_id: UUID, fecha: date, hora_inicio: time, hora_fin: time
+        self,
+        empleado_id: UUID,
+        fecha: date,
+        hora_inicio: time,
+        hora_fin: time,
+        minutos_jornada_ordinaria: int | None = None,
     ) -> TurnoRegistrado:
         empleado = self.empleados.obtener(empleado_id)
         if empleado is None:
@@ -46,7 +51,15 @@ class RegistrarTurno:
                 f"{periodo.estado.value}: reábralo para corregir turnos"
             )
 
-        turno = Turno(fecha=fecha, hora_inicio=hora_inicio, hora_fin=hora_fin)
+        try:
+            turno = Turno(
+                fecha=fecha,
+                hora_inicio=hora_inicio,
+                hora_fin=hora_fin,
+                minutos_jornada_ordinaria=minutos_jornada_ordinaria,
+            )
+        except ValueError as e:
+            raise ReglaDeNegocioError(str(e)) from e
         vecinos = self.turnos.de_empleado_entre(
             empleado_id, fecha - timedelta(days=1), fecha + timedelta(days=1)
         )

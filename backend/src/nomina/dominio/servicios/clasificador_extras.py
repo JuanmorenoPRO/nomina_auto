@@ -21,6 +21,11 @@ La estrategia es un parámetro con vigencias (`estrategia_clasificacion_extras`)
 
 Si el umbral cae dentro de un tramo, el tramo se parte en dos; la clasificación
 conserva franja y tipo de día (una extra nocturna dominical sigue siéndolo).
+
+Excepción: los tramos de un turno marcado como «jornada ordinaria» llegan ya
+clasificados desde la segmentación y ninguna estrategia los toca — pero sus
+minutos sí alimentan el acumulado, porque para eso se registró el turno: para
+cuadrar las horas de la quincena.
 """
 
 from __future__ import annotations
@@ -63,6 +68,8 @@ def clasificar_extras(
 
 def _clasificar_contra_limite(tramo: Tramo, acumulado: int, limite: int) -> list[Tramo]:
     """Parte/marca un tramo según cuánto presupuesto ordinario queda."""
+    if tramo.jornada_ordinaria:
+        return [tramo]  # ya clasificado por el umbral propio del turno
     restante = limite - acumulado
     if restante <= 0:
         return [tramo.como_extra()]
