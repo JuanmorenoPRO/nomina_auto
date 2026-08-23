@@ -23,6 +23,7 @@ una sola vez, al final, por concepto, a pesos enteros con ROUND_HALF_UP.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import calendar
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -47,6 +48,7 @@ NOMBRES_CONCEPTOS = {
     "extra_diurna_festiva": "TIEMPO FESTIVO EXTRA",
     "extra_nocturna_festiva": "TIEMPO EXTRA NOCTURNO DOMINICAL/FESTIVO",
     "auxilio_transporte": "AUXILIO DE TRANSPORTE",
+    "dia_31": "DIA 31",
 }
 
 # Conceptos que NO forman parte del IBC de aportes de seguridad social.
@@ -105,6 +107,13 @@ def _clasificar(tramo: Tramo, parametros: ProveedorParametros) -> _Clasificacion
     return None  # ordinaria diurna en día ordinario: ya cubierta por el salario
 
 
+def _dia_31_del_mes(fecha_periodo: date) -> date | None:
+    """El 31 del mes del periodo, o `None` si el mes no lo tiene."""
+    if calendar.monthrange(fecha_periodo.year, fecha_periodo.month)[1] < 31:
+        return None
+    return date(fecha_periodo.year, fecha_periodo.month, 31)
+
+
 def _redondear_pesos(valor: Decimal) -> Decimal:
     return valor.quantize(_UN_PESO, rounding=ROUND_HALF_UP)
 
@@ -120,6 +129,7 @@ def liquidar(
     conceptos_manuales: tuple[ConceptoManual, ...] = (),
     descontar_seguridad_social: bool = False,
     quincena_completa: bool = True,
+    pagar_dia_31: bool = False,
 ) -> Liquidacion:
     """Liquida la quincena de un empleado a partir de sus tramos ya clasificados.
 
@@ -148,10 +158,17 @@ def liquidar(
     mitad de periodo) — las horas ordinarias se pagan sobre lo efectivamente
     trabajado, topado al legal.
 
-    Las dos marcas comparten la misma base (`minutos_base`): todo lo trabajado que no
-    sea extra, topado al presupuesto legal. Ver el comentario en el cuerpo.
+    `pagar_dia_31` (default `False`): la quincena 16–fin de mes se paga SIEMPRE como
+    15 días (`horas_quincena` = divisor/30 × 15), tenga el mes 30 o 31. Cuando tiene 31,
+    ese día es un 16.º día que el salario no cubre; marcado, sus horas no-extra se
+    reconocen aparte a hora base (concepto `dia_31`). Los recargos y las extras del 31
+    ya se pagan en sus propias líneas: aquí solo se agrega la hora base que falta.
+
+    Las marcas comparten la base de «lo laborado»: todo lo trabajado que no sea extra,
+    topado al presupuesto legal. Ver el comentario en el cuerpo.
     """
     override = factores_override or {}
+    _dia_31 = _dia_31_del_mes(fecha_periodo)
     tarifa_hora = salario_mensual / parametros.divisor_hora_ordinaria(fecha_periodo)
 
     # Agrupar minutos por (concepto, factor): si una vigencia cambia dentro del
@@ -181,9 +198,30 @@ def liquidar(
     # Las extras NO entran: se pagan por encima del presupuesto y su factor ya trae la
     # `hora_base`, así que contarlas aquí les pagaría la base dos veces.
     minutos_no_extra = sum(t.minutos for t in tramos_clasificados if not t.es_extra)
-    minutos_base = min(minutos_no_extra, minutos_quincena_legal)
 
-    minutos_quincena = minutos_quincena_legal if quincena_completa else minutos_base
+    # Día 31: horas que el presupuesto de 15 días no cubre. Se cuenta desde el 31
+    # en adelante, no solo el día 31, para que el turno nocturno que arranca ese día
+    # y cruza al 1.º del mes siguiente entre completo: ese turno se liquida en esta
+    # quincena y tampoco lo cubre el presupuesto.
+    #
+    # Los turnos de relleno (jornada ordinaria) SÍ cuentan: lo que su marca dice es
+    # que esas horas «las cubre el salario» y por eso no pagan recargo — pero el 31
+    # el salario no las cubre, y sus minutos sí consumen presupuesto en el
+    # clasificador. Excluirlas dejaría sin pagar el 31 a quien registra la quincena
+    # entera como jornada ordinaria, que es el uso normal del cuadro de turnos.
+    minutos_dia_31 = (
+        sum(t.minutos for t in tramos_clasificados if not t.es_extra and t.fecha >= _dia_31)
+        if pagar_dia_31 and _dia_31 is not None
+        else 0
+    )
+
+    # El auxilio prorratea sobre TODO lo laborado: el 31 es un día trabajado como
+    # cualquier otro. El tiempo ordinario, en cambio, descuenta las horas del 31,
+    # que se pagan en su propia línea: contarlas aquí las pagaría dos veces.
+    minutos_base_auxilio = min(minutos_no_extra, minutos_quincena_legal)
+    minutos_base_ordinario = min(minutos_no_extra - minutos_dia_31, minutos_quincena_legal)
+
+    minutos_quincena = minutos_quincena_legal if quincena_completa else minutos_base_ordinario
     conceptos.append(
         ConceptoLiquidado(
             codigo="tiempo_ordinario",
@@ -218,6 +256,19 @@ def liquidar(
             )
         )
 
+    if minutos_dia_31:
+        conceptos.append(
+            ConceptoLiquidado(
+                codigo="dia_31",
+                nombre=NOMBRES_CONCEPTOS["dia_31"],
+                minutos=minutos_dia_31,
+                tarifa_hora=tarifa_hora,
+                factor=_UN_PESO,
+                componentes={"hora_base": _UN_PESO},
+                valor=_redondear_pesos(Decimal(minutos_dia_31) / MINUTOS_POR_HORA * tarifa_hora),
+            )
+        )
+
     # IBC de aportes: devengados salariales por horas (todo menos auxilio y no salariales).
     ibc = sum(
         (c.valor for c in conceptos if c.codigo not in NO_SALARIALES),
@@ -234,7 +285,7 @@ def liquidar(
             # Se prorratea aunque la quincena se liquide completa — son dos marcas
             # independientes. `componentes` deja las horas a la vista en el reporte,
             # que si no sería un valor sin explicación.
-            horas_base = Decimal(minutos_base) / MINUTOS_POR_HORA
+            horas_base = Decimal(minutos_base_auxilio) / MINUTOS_POR_HORA
             auxilio = mensual * horas_base / parametros.divisor_hora_ordinaria(fecha_periodo)
             componentes_auxilio = {"horas_laboradas": horas_base}
         conceptos.append(

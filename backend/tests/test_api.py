@@ -539,3 +539,56 @@ def test_jornada_ordinaria_rechaza_turno_inexistente_y_periodo_cerrado(client):
         f"/turnos/{turno['id']}/jornada-ordinaria", json={"minutos_jornada_ordinaria": 300}
     )
     assert r.status_code == 400
+
+
+def test_marcar_pagar_dia_31_agrega_la_linea(client):
+    """La marca viaja por la API y el motor reconoce las horas del 31 a hora base."""
+    unidad = client.post("/unidades", json={"nombre": "Edificio Dia 31 P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "WALTER DIA31",
+            "documento": "71712123",
+            "cargo": "vigilante",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-03-16", "fecha_fin": "2026-03-31"}
+    ).json()
+    r = client.post(
+        "/turnos",
+        json={
+            "empleado_id": empleado["id"],
+            "fecha": "2026-03-31",
+            "hora_inicio": "06:00",
+            "hora_fin": "14:00",
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    # El flag arranca apagado aunque no exista fila de ajustes.
+    r = client.get(
+        "/ajustes-quincena",
+        params={"empleado_id": empleado["id"], "periodo_id": periodo["id"]},
+    )
+    assert r.json()["pagar_dia_31"] is False
+
+    r = client.put(
+        "/ajustes-quincena",
+        params={"empleado_id": empleado["id"], "periodo_id": periodo["id"]},
+        json={"pagar_dia_31": True},
+    )
+    assert r.status_code == 200
+    assert r.json()["pagar_dia_31"] is True
+    # No pisa los flags hermanos.
+    assert r.json()["quincena_incompleta"] is False
+    assert r.json()["auxilio_por_dias_laborados"] is False
+
+    liq = client.post(
+        f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}
+    ).json()
+    conceptos = {c["codigo"]: c for c in liq["empleados"][0]["conceptos"]}
+    assert conceptos["dia_31"]["valor"] == 80_000  # 8 h × 10.000
+    assert conceptos["dia_31"]["nombre"] == "DIA 31"

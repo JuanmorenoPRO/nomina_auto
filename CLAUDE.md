@@ -113,6 +113,17 @@ dominio  ←  aplicacion  ←  infraestructura
   jornada`) reducida a horas. La marca **manda** sobre `incapacitado`/`ocasional`: marcada,
   el auxilio se paga aunque esos estados lo quiten entero. Con la quincena completa da el
   mismo valor que el plano. Referencia verificada: `tests/dominio/golden/test_golden_lorena.py`.
+- **Día 31 (marca por empleado y quincena):** la quincena 16–fin de mes se paga SIEMPRE
+  como 15 días (`horas_quincena` = `divisor_hora_ordinaria`/30 × 15), tenga el mes 30 o 31.
+  En los meses de 31, ese día es un 16.º día que el salario no cubre: marcada, sus horas
+  **no-extra** se reconocen aparte a hora base (concepto `dia_31`, ×1, salarial). Los
+  recargos y las extras del 31 ya se pagan en sus propias líneas — aquí solo se agrega la
+  hora base que falta. Se cuenta **del 31 en adelante**, para que el turno nocturno que
+  arranca ese día y cruza al 1.º del mes siguiente entre completo (se liquida en esta
+  quincena y tampoco lo cubre el presupuesto). Los turnos de relleno (jornada ordinaria)
+  **sí** cuentan: su marca significa «esto lo cubre el salario», y el 31 no lo cubre.
+  No toca el auxilio, que sigue siendo el de 15 días.
+  Referencia verificada: `tests/dominio/golden/test_golden_rio_claro_16_31.py`.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).

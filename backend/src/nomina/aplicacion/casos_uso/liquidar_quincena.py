@@ -83,11 +83,14 @@ class RepositorioAjustesQuincena(Protocol):
       excedente del presupuesto quincenal (el empleado concentró horas para
       descansar otros días sin superar el tope de la quincena).
     - `auxilio_por_dias_laborados`: prorratear el auxilio de transporte en
-      proporción a lo laborado en vez de pagar el quincenal plano."""
+      proporción a lo laborado en vez de pagar el quincenal plano.
+    - `pagar_dia_31`: reconocer aparte las horas no-extra del día 31, que el
+      presupuesto de 15 días de la quincena no cubre."""
 
     def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def sin_extras(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def auxilio_por_dias_laborados(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
+    def pagar_dia_31(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,9 @@ class LiquidarQuincena:
             # El prorrateo del auxilio lo hace el dominio sobre las horas no-extra
             # efectivamente laboradas; aquí solo se transmite la marca.
             por_dias = self.ajustes_quincena.auxilio_por_dias_laborados(empleado.id, periodo_id)
+            # El día 31 queda fuera del presupuesto (la quincena se paga como 15 días);
+            # el dominio decide qué horas de ese día reconocer.
+            dia_31 = self.ajustes_quincena.pagar_dia_31(empleado.id, periodo_id)
             resultado = liquidar(
                 clasificados,
                 empleado.salario_base,
@@ -160,6 +166,7 @@ class LiquidarQuincena:
                 conceptos_manuales=manuales,
                 descontar_seguridad_social=unidad.descuenta_seguridad_social,
                 quincena_completa=not incompleta,
+                pagar_dia_31=dia_31,
             )
             por_empleado.append(LiquidacionEmpleado(empleado=empleado, liquidacion=resultado))
 
