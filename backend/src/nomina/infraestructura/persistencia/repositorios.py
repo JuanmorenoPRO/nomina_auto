@@ -433,6 +433,10 @@ class RepositorioAjustesQuincenaSQL:
         m = self._obtener(empleado_id, periodo_id)
         return m.auxilio_por_dias_laborados if m else False
 
+    def pagar_dia_31(self, empleado_id: UUID, periodo_id: UUID) -> bool:
+        m = self._obtener(empleado_id, periodo_id)
+        return m.pagar_dia_31 if m else False
+
     def marcar(
         self,
         empleado_id: UUID,
@@ -441,6 +445,7 @@ class RepositorioAjustesQuincenaSQL:
         quincena_incompleta: bool | None = None,
         sin_extras: bool | None = None,
         auxilio_por_dias_laborados: bool | None = None,
+        pagar_dia_31: bool | None = None,
     ) -> None:
         """Actualiza los flags dados; `None` deja el flag como estaba (una fila
         nueva arranca con todos en `False`)."""
@@ -456,6 +461,8 @@ class RepositorioAjustesQuincenaSQL:
             m.sin_extras = sin_extras
         if auxilio_por_dias_laborados is not None:
             m.auxilio_por_dias_laborados = auxilio_por_dias_laborados
+        if pagar_dia_31 is not None:
+            m.pagar_dia_31 = pagar_dia_31
         self.session.flush()
 
 

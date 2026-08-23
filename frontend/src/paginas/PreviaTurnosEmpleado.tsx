@@ -71,6 +71,12 @@ const TITULO_AUXILIO_POR_DIAS =
   "(auxilio mensual × horas ÷ horas del mes), en vez del auxilio quincenal completo. " +
   "Marcado, se paga aunque el empleado esté incapacitado u ocasional.";
 
+const TITULO_PAGAR_DIA_31 =
+  "La quincena se paga siempre como 15 días, así que en los meses de 31 ese día " +
+  "queda fuera del presupuesto. Marcado, sus horas trabajadas (las que no sean " +
+  "extra) se reconocen aparte a hora base, en la línea DIA 31. Los recargos y las " +
+  "extras del 31 ya se pagan en sus propias líneas.";
+
 const TITULO_JORNADA_ORDINARIA =
   "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
   "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
@@ -126,6 +132,8 @@ export function PreviaTurnosEmpleado({
   const [guardandoSinExtras, setGuardandoSinExtras] = useState(false);
   const [auxilioPorDias, setAuxilioPorDias] = useState(false);
   const [guardandoAuxilio, setGuardandoAuxilio] = useState(false);
+  const [pagarDia31, setPagarDia31] = useState(false);
+  const [guardandoDia31, setGuardandoDia31] = useState(false);
   const [guardandoEstado, setGuardandoEstado] = useState<CampoEstado | null>(null);
 
   useEffect(() => {
@@ -135,6 +143,7 @@ export function PreviaTurnosEmpleado({
         setQuincenaIncompleta(a.quincena_incompleta);
         setSinExtras(a.sin_extras);
         setAuxilioPorDias(a.auxilio_por_dias_laborados);
+        setPagarDia31(a.pagar_dia_31);
       })
       .catch((e) => setError(e.message));
   }, [empleado.id, periodo.id]);
@@ -191,6 +200,19 @@ export function PreviaTurnosEmpleado({
       setError((err as Error).message);
     } finally {
       setGuardandoAuxilio(false);
+    }
+  }
+
+  async function marcarPagarDia31(valor: boolean) {
+    setError("");
+    setGuardandoDia31(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, { pagar_dia_31: valor });
+      setPagarDia31(valor);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoDia31(false);
     }
   }
 
@@ -320,6 +342,9 @@ export function PreviaTurnosEmpleado({
       return suma + minutosDeTurno({ hora_inicio: inicio, hora_fin: fin });
     }, 0);
   }
+
+  /** El 31 del periodo, si el mes lo tiene: la quincena se paga como 15 días. */
+  const dia31 = useMemo(() => dias.find((d) => d.endsWith("-31")), [dias]);
 
   const totalMinutos = useMemo(
     () => dias.reduce((suma, d) => suma + minutosDia(d), 0),
@@ -619,6 +644,19 @@ export function PreviaTurnosEmpleado({
             Calcular el auxilio de transporte con lo laborado (
             {(totalMinutos / 60).toFixed(1)} h)
           </label>
+          {dia31 !== undefined && (
+            <label className="casilla" title={TITULO_PAGAR_DIA_31}>
+              <input
+                type="checkbox"
+                checked={pagarDia31}
+                disabled={soloLectura || guardandoDia31}
+                onChange={(e) => marcarPagarDia31(e.target.checked)}
+              />
+              Pagar aparte el día 31 ({(minutosDia(dia31) / 60).toFixed(1)} h registradas):
+              la quincena se liquida como 15 días, así que ese día queda fuera del
+              presupuesto y sus horas se reconocen a hora base
+            </label>
+          )}
         </div>
         <div className="fila" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="secundario" onClick={alCerrar}>

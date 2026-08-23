@@ -248,3 +248,30 @@ def test_liquidar_usa_festivos_manuales(session, contexto):
     liquidacion = _liquidar(session).ejecutar(periodo.id, unidad.id)
     valores = {c.codigo: c.valor for c in liquidacion.por_empleado[0].liquidacion.conceptos}
     assert valores["festivo_diurno"] == Decimal(144_000)  # 8 h × 1,80 × 10.000
+
+
+def test_pagar_dia_31_reconoce_las_horas_fuera_del_presupuesto(session, contexto):
+    """La quincena 16–fin de mes se paga como 15 días, así que en un mes de 31 el
+    día 31 queda fuera del presupuesto. Marcado, sus horas van a su propia línea.
+
+    Marzo de 2026 para que el 31 caiga en martes (día ordinario) y el divisor
+    vigente siga siendo 220 → tarifa 10.000 exactos.
+    """
+    unidad, empleado, _ = contexto
+    periodo = PeriodoLiquidacion(
+        id=uuid4(), fecha_inicio=date(2026, 3, 16), fecha_fin=date(2026, 3, 31)
+    )
+    RepositorioPeriodosSQL(session).guardar(periodo)
+    _registrar(session).ejecutar(empleado.id, date(2026, 3, 30), time(6), time(14))
+    _registrar(session).ejecutar(empleado.id, date(2026, 3, 31), time(6), time(14))
+
+    sin_marca = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    assert "dia_31" not in {c.codigo for c in sin_marca.por_empleado[0].liquidacion.conceptos}
+
+    RepositorioAjustesQuincenaSQL(session).marcar(empleado.id, periodo.id, pagar_dia_31=True)
+    con_marca = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    dia_31 = next(
+        c for c in con_marca.por_empleado[0].liquidacion.conceptos if c.codigo == "dia_31"
+    )
+    assert dia_31.horas == 8
+    assert dia_31.valor == Decimal(80_000)  # 8 h × 10.000, sin recargo: es hora base

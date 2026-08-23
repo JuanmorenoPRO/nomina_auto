@@ -125,7 +125,7 @@ trabajara, así que sus primeros N minutos no pagan recargo y solo el excedente 
 como extra.
 
 **`ajuste_quincena`** — id, empleado_id FK, periodo_id FK (únicos como par),
-quincena_incompleta, sin_extras, auxilio_por_dias_laborados. Las tres marcas que cambian
+quincena_incompleta, sin_extras, auxilio_por_dias_laborados, pagar_dia_31. Las marcas que cambian
 cómo se liquida ese empleado en esa quincena: pagar el tiempo ordinario sobre lo laborado,
 no cobrar extras por turno, y prorratear el auxilio de transporte. La tercera **manda**
 sobre `incapacitado` / `ocasional`.
@@ -275,12 +275,23 @@ cuyo factor es la suma de componentes independientes:
 | TIEMPO EXTRA NOCTURNO DOMINICAL/FESTIVO | 1 + extra_nocturna + recargo_dominical | 2.55 → 2.65 |
 | AUXILIO DE TRANSPORTE | auxilio_transporte_mensual / 2 | — |
 | AUXILIO DE TRANSPORTE (prorrateado) | auxilio_transporte_mensual × horas laboradas / divisor_hora_ordinaria | — |
+| DIA 31 | hora_base | 1.00 |
 
 El auxilio se paga quincenal plano por defecto. La marca por empleado y quincena
 `auxilio_por_dias_laborados` lo prorratea sobre **lo laborado** (los minutos no-extra,
 topados al presupuesto): pesos del mes × horas / horas del mes. Marcada, se paga aunque el
 empleado esté `incapacitado` u `ocasional`, que normalmente lo quitan entero. Con la
 quincena completa el prorrateo da el mismo valor que el plano.
+
+La marca `pagar_dia_31` cubre el desfase entre el presupuesto y el calendario: la quincena
+16–fin de mes se paga siempre como 15 días (`horas_quincena` = divisor/30 × 15), así que en
+los meses de 31 ese día queda fuera. Marcada, sus horas no-extra se pagan a `hora_base` ×1 en
+la línea `dia_31` (salarial, entra al IBC) y se descuentan de la base del tiempo ordinario
+para no pagarlas dos veces; el auxilio no cambia. El corte es «del 31 en adelante», no «el
+día 31», para que el turno nocturno que arranca ese día y cruza al mes siguiente entre
+completo. Los turnos de relleno (jornada ordinaria) cuentan como cualquier otro: su marca
+solo dice que el salario cubre esas horas, y el 31 no las cubre. Verificada contra
+`JULIO RIO CLARO 2026.xlsx`.
 
 La misma base alimenta la marca `quincena_incompleta`, que paga el TIEMPO ORDINARIO sobre lo
 laborado en vez del presupuesto completo. Las horas festivas y nocturnas **sí** cuentan en

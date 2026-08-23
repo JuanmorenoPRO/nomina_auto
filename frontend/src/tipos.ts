@@ -70,6 +70,7 @@ export interface AjusteQuincena {
   quincena_incompleta: boolean;
   sin_extras: boolean;
   auxilio_por_dias_laborados: boolean;
+  pagar_dia_31: boolean;
 }
 
 export interface Periodo {

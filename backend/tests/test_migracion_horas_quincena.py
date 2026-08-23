@@ -82,8 +82,10 @@ def test_reaplicarla_sobre_una_base_correcta_no_cambia_nada(bd):
         s.commit()
     antes = _vigencias(engine, "horas_quincena")
     assert antes == ESPERADO
+    # A la revisión concreta, no a `head`: `stamp` no toca el esquema, así que
+    # subir hasta head reaplicaría también las migraciones posteriores.
     _alembic(url, "stamp", "a8d3f5b71c26")
-    _alembic(url, "upgrade", "head")
+    _alembic(url, "upgrade", "c1b7e40a9f38")
     assert _vigencias(engine, "horas_quincena") == antes
 
 
