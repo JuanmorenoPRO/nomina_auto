@@ -1,7 +1,8 @@
 # Arquitectura — Nómina de Unidades Residenciales (Colombia)
 
-> Fase 0. Documento de diseño aprobado antes de escribir código.
-> Las reglas resumidas para el día a día están en `CLAUDE.md`.
+> Nació como el documento de diseño de la Fase 0, aprobado antes de escribir código, y se
+> mantiene al día con lo que se construyó. Las reglas resumidas para el día a día y el
+> estado del proyecto están en `CLAUDE.md`; la referencia de componentes, en `README.md`.
 
 ## 1. Contexto y objetivo
 
@@ -99,41 +100,78 @@ hora local Bogotá (Colombia no tiene DST, pero la TZ queda explícita).
 
 ### Tablas
 
-**`unidad_residencial`** — id, nombre, nit, activa.
+**`unidad_residencial`** — id, nombre, nit, activa, descuenta_seguridad_social,
+config `JSON`. `config` guarda lo que la unidad hace distinto: `estrategia_extras`
+(sobreescribe la global), `factores_override` (factor fijo por concepto, para unidades
+cuya planilla usa la tabla de factores legada) y `conceptos_fijos` (devengados o
+deducciones que se aplican a todos sus empleados en cada liquidación).
 
 **`empleado`** — id, unidad_id FK, nombre, tipo_documento, documento (único), cargo,
-salario_base `NUMERIC`, activo. Dato sensible (Ley 1581/2012): acceso restringido por rol.
+salario_base `NUMERIC`, activo, incapacitado, ocasional. Dato sensible (Ley 1581/2012):
+acceso restringido por rol. `incapacitado` y `ocasional` quitan el auxilio de transporte,
+salvo que se prorratee (ver `ajuste_quincena`).
 
-**`periodo_liquidacion`** — id, fecha_inicio, fecha_fin, estado
+**`periodo_liquidacion`** — id, fecha_inicio, fecha_fin (únicos como par), estado
 (`abierto` → `liquidado` → `cerrado`). Las quincenas típicas son 1–15 y 16–fin de mes,
 pero el periodo se define por fechas, no por regla fija.
 
-**`turno`** — id, empleado_id FK, fecha (día en que **inicia**), hora_inicio, hora_fin.
-Si `hora_fin ≤ hora_inicio`, el turno cruza medianoche y termina el día siguiente.
-Turno partido = varios registros el mismo día. Descanso = ausencia de turno.
-Validaciones: duración ≤ 24 h, sin solapamiento entre turnos del mismo empleado.
+**`turno`** — id, empleado_id FK, fecha (día en que **inicia**), hora_inicio, hora_fin,
+minutos_jornada_ordinaria `INT NULL`. Si `hora_fin ≤ hora_inicio`, el turno cruza
+medianoche y termina el día siguiente. Turno partido = varios registros el mismo día.
+Descanso = ausencia de turno. Validaciones: duración ≤ 24 h, sin solapamiento entre turnos
+del mismo empleado. `minutos_jornada_ordinaria` (`NULL` = turno normal) marca el turno como
+**jornada ordinaria**: se registró para cuadrar las horas de la quincena, no porque se
+trabajara, así que sus primeros N minutos no pagan recargo y solo el excedente se reconoce
+como extra.
+
+**`ajuste_quincena`** — id, empleado_id FK, periodo_id FK (únicos como par),
+quincena_incompleta, sin_extras, auxilio_por_dias_laborados. Las tres marcas que cambian
+cómo se liquida ese empleado en esa quincena: pagar el tiempo ordinario sobre lo laborado,
+no cobrar extras por turno, y prorratear el auxilio de transporte. La tercera **manda**
+sobre `incapacitado` / `ocasional`.
 
 **`parametro_legal`** — id, codigo, valor `NUMERIC` (o texto para parámetros no
 numéricos), vigente_desde `DATE`, vigente_hasta `DATE NULL` (NULL = vigente
-indefinidamente), norma_referencia. **Restricción: las vigencias de un mismo código no se
+indefinidamente), norma. **Restricción: las vigencias de un mismo código no se
 solapan** (constraint de exclusión en PostgreSQL; validación en aplicación para SQLite).
 
-**`festivo`** — id, fecha (única), nombre, origen (`calculado` | `manual`), anio.
-`manual` tiene precedencia sobre `calculado` (permite corregir si la ley cambia).
+**`festivo`** — id, fecha (única), nombre, es_festivo. Guarda **solo los ajustes manuales**
+al calendario: `es_festivo = true` agrega un festivo que la ley no contempla,
+`false` anula uno calculado. Los festivos de ley **no se persisten**: se calculan
+(ver §5.5).
 
-**`liquidacion`** — id, periodo_id FK, unidad_id FK, version `INT`, estado, snapshot
-JSON de los parámetros usados (reproducibilidad histórica), creada_por FK, creada_en.
-**Nunca se actualiza:** una corrección genera `version + 1`.
+**`liquidacion`** — id, periodo_id FK, unidad_id FK, version `INT` (únicos como trío),
+parametros_snapshot `JSON` (todos los parámetros usados, para reproducibilidad histórica),
+creada_en. **Nunca se actualiza:** una corrección genera una versión nueva.
 
-**`concepto_liquidado`** — id, liquidacion_id FK, empleado_id FK, codigo_concepto,
-minutos `INT`, tarifa_hora `NUMERIC`, factor `NUMERIC`, valor `NUMERIC`.
+**`liquidacion_empleado`** — id, liquidacion_id FK, empleado_id FK, nombre_empleado,
+salario_mensual `NUMERIC`, tarifa_hora `NUMERIC`. Nivel intermedio entre la liquidación y
+sus conceptos: congela el nombre y el salario que tenía el empleado al liquidar, para que
+una liquidación vieja no cambie si después se le corrige el salario.
+
+**`concepto_liquidado`** — id, liquidacion_empleado_id FK, orden, tipo
+(`devengado` | `deduccion`), codigo, nombre, minutos `INT`, tarifa_hora `NUMERIC`,
+factor `NUMERIC`, componentes `JSON`, valor `NUMERIC`. `componentes` desglosa de qué se
+compone el factor (ej. `{"hora_base": 1, "recargo_dominical_festivo": 0.90}`): es lo que
+hace auditable cada peso.
+
+**`concepto_manual`** — id, empleado_id FK, periodo_id FK, tipo
+(`devengado` | `deduccion`), nombre, valor `NUMERIC`, salarial. Devengados y deducciones
+puntuales de un empleado en una quincena (préstamos, bonos, descuentos). `salarial` solo
+aplica a los devengados: indica si suma al IBC.
 
 **`usuario`** — id, email, hash_password (Argon2id), rol
 (`admin` | `contadora` | `operador`), activo.
 
-**`auditoria`** — id, usuario_id, accion, entidad, entidad_id, antes JSON, despues JSON,
-timestamp UTC. **Append-only**: sin UPDATE/DELETE (trigger/permisos de BD en Fase 4).
-Siempre se auditan: cambios de parámetros legales y ediciones de turnos ya liquidados.
+**`sesion`** — id, token_hash, usuario_id FK, expira_en, creada_en. **En la base solo se
+guarda el SHA-256 del token**, nunca el token: el valor real vive únicamente en la cookie
+`HttpOnly` del navegador.
+
+**`auditoria`** — id, usuario_email, accion, entidad, entidad_id, antes `JSON`,
+despues `JSON`, timestamp UTC. **Append-only**: triggers de BD rechazan `UPDATE` y
+`DELETE`. Se guarda el correo, no el id, para que el rastro sobreviva a la desactivación
+del usuario. Siempre se auditan: cambios de parámetros legales y ediciones de turnos ya
+liquidados.
 
 ### Parámetros iniciales (semilla)
 
@@ -272,8 +310,9 @@ siempre cuadra visualmente.
 ### 5.5 Calendario de festivos
 
 Servicio puro: festivos fijos + móviles derivados de Pascua (algoritmo de Butcher) +
-traslado a lunes de los festivos que lo exigen (Ley Emiliani 51/1983). La tabla
-`festivo` materializa los calculados y admite altas/ediciones manuales con precedencia.
+traslado a lunes de los festivos que lo exigen (Ley Emiliani 51/1983). Los festivos de ley
+**se calculan, no se guardan**; la tabla `festivo` almacena solo los **ajustes manuales**
+—altas y anulaciones— que se aplican encima del calendario calculado.
 Tests contra los festivos oficiales de 2025, 2026 y 2027.
 
 ## 6. Seguridad (por diseño)
@@ -312,9 +351,16 @@ Datos protegidos por Ley 1581/2012 (habeas data): cédulas y salarios.
 | Fase | Entregable | Estado |
 |---|---|---|
 | 0 | Arquitectura, modelo de datos, esqueleto, CLAUDE.md | ✅ |
-| 1 | Dominio puro + motor + festivos + golden tests + CLI | pendiente |
+| 1 | Dominio puro + motor + festivos + golden tests + CLI | ✅ |
 | 2 | Persistencia, parámetros con vigencias, casos de uso, API | ✅ |
 | 3 | UI: grilla quincenal, configuración, reportes, Excel | ✅ |
 | 4 | Auth, roles, auditoría, cierre de quincenas, hardening | ✅ |
+| 5 | Descuento de seguridad social por unidad, conceptos manuales y fijos, estrategia de extras `diaria`, factores por unidad | ✅ |
 
 Una fase a la vez, con revisión del usuario al final de cada una.
+
+> **Las cinco fases del plan original están completas.** Esta tabla queda como registro de
+> ese plan. El estado vigente del proyecto y las funciones que se añadieron después
+> (jornada ordinaria por turno, quincena incompleta, auxilio prorrateado) se llevan en
+> `CLAUDE.md`, que es la fuente única: no dupliquen aquí el estado o volverán a
+> desincronizarse.
