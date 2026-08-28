@@ -5,9 +5,13 @@ La estrategia es un parámetro con vigencias (`estrategia_clasificacion_extras`)
 - `presupuesto_quincenal` (método actual de la contadora): las primeras
   `horas_quincena` (hoy 110 h) del periodo, en orden cronológico, son
   ordinarias; el excedente es extra.
-- `semanal_legal`: acumulado por semana calendario (lunes a domingo) contra la
+- `semanal_legal` (criterio de la ley: CST art. 159 y 161, Ley 2101/2021):
+  acumulado por semana calendario (lunes a domingo) contra la
   `jornada_maxima_semanal` vigente en la fecha de cada tramo (44 h → 42 h el
-  15-jul-2026). Solo cuenta lo trabajado dentro del periodo liquidado.
+  15-jul-2026). La semana NO se reinicia en el corte de quincena: los tramos de
+  la misma semana que ya se liquidaron en el periodo anterior se pasan como
+  `tramos_contexto` y consumen presupuesto sin volver a pagarse. Sin eso, una
+  semana partida por el corte recibiría 42 h de presupuesto dos veces.
 - `diaria`: umbral por día calendario — lo que exceda `horas_jornada_diaria`
   (hoy 8 h) trabajadas en un mismo día es extra. Un día de 12 h paga 8 h
   ordinarias/recargo y 4 h extra. Ojo: la cola de un turno que cruzó medianoche
@@ -30,6 +34,7 @@ cuadrar las horas de la quincena.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 from nomina.dominio.puertos.parametros import ProveedorParametros
@@ -47,18 +52,25 @@ def clasificar_extras(
     parametros: ProveedorParametros,
     fecha_periodo: date,
     estrategia: str | None = None,
+    tramos_contexto: Sequence[Tramo] = (),
 ) -> list[Tramo]:
     """Devuelve los tramos (cronológicos) con `es_extra` asignado.
 
     `fecha_periodo` es la fecha de inicio del periodo: define la vigencia de la
     estrategia y del presupuesto quincenal.
+
+    `tramos_contexto` son tramos anteriores al periodo que CONSUMEN presupuesto
+    pero no se devuelven ni se liquidan aquí (ya se pagaron en su propia
+    quincena). Solo `semanal_legal` los usa: son las horas de la misma semana
+    calendario que quedaron al otro lado del corte de quincena. Las demás
+    estrategias tienen umbral por turno, por día o por periodo y los ignoran.
     """
     ordenados = sorted(tramos, key=lambda t: t.inicio)
     estrategia = estrategia or parametros.estrategia_clasificacion_extras(fecha_periodo)
     if estrategia == PRESUPUESTO_QUINCENAL:
         return _por_presupuesto_quincenal(ordenados, parametros, fecha_periodo)
     if estrategia == SEMANAL_LEGAL:
-        return _por_semana_legal(ordenados, parametros)
+        return _por_semana_legal(ordenados, parametros, tramos_contexto)
     if estrategia == DIARIA:
         return _por_jornada_diaria(ordenados, parametros)
     if estrategia == JORNADA:
@@ -123,8 +135,19 @@ def _por_jornada_continua(tramos: list[Tramo], parametros: ProveedorParametros) 
     return resultado
 
 
-def _por_semana_legal(tramos: list[Tramo], parametros: ProveedorParametros) -> list[Tramo]:
+def _por_semana_legal(
+    tramos: list[Tramo],
+    parametros: ProveedorParametros,
+    tramos_contexto: Sequence[Tramo] = (),
+) -> list[Tramo]:
     acumulado_por_semana: dict[tuple[int, int], int] = {}
+    # Las horas de la misma semana que ya se liquidaron en la quincena anterior
+    # gastan presupuesto primero: son cronológicamente previas a todo el periodo.
+    for previo in tramos_contexto:
+        semana_previa = previo.fecha.isocalendar()[:2]
+        acumulado_por_semana[semana_previa] = (
+            acumulado_por_semana.get(semana_previa, 0) + previo.minutos
+        )
     resultado: list[Tramo] = []
     for tramo in tramos:
         semana = tramo.fecha.isocalendar()[:2]

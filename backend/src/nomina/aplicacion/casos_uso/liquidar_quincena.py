@@ -12,7 +12,7 @@ como liquidado es un paso explícito aparte (ver `MarcarPeriodoLiquidado`).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -33,8 +33,13 @@ from nomina.dominio.puertos.repositorios import (
 )
 from nomina.dominio.servicios.calculadora import liquidar
 from nomina.dominio.servicios.calendario_festivos import CalendarioFestivos
-from nomina.dominio.servicios.clasificador_extras import PRESUPUESTO_QUINCENAL, clasificar_extras
+from nomina.dominio.servicios.clasificador_extras import (
+    PRESUPUESTO_QUINCENAL,
+    SEMANAL_LEGAL,
+    clasificar_extras,
+)
 from nomina.dominio.servicios.segmentador import segmentar_turnos
+from nomina.dominio.valores.tramo import Tramo
 
 
 @dataclass(frozen=True)
@@ -137,8 +142,15 @@ class LiquidarQuincena:
             estrategia = (
                 PRESUPUESTO_QUINCENAL if sin_extras else unidad.config.estrategia_extras
             )
+            contexto = self._tramos_semana_previa(
+                empleado.id, periodo, estrategia, conjunto, calendario
+            )
             clasificados = clasificar_extras(
-                tramos, conjunto, periodo.fecha_inicio, estrategia=estrategia
+                tramos,
+                conjunto,
+                periodo.fecha_inicio,
+                estrategia=estrategia,
+                tramos_contexto=contexto,
             )
             # Conceptos fijos de la unidad (ej. cuota de manejo) + manuales del empleado.
             manuales = unidad.config.conceptos_fijos + tuple(
@@ -190,3 +202,31 @@ class LiquidarQuincena:
         ]
         self.liquidaciones.guardar(liquidacion, snapshot)
         return liquidacion
+
+    def _tramos_semana_previa(
+        self,
+        empleado_id: UUID,
+        periodo: PeriodoLiquidacion,
+        estrategia: str,
+        parametros: ConjuntoParametros,
+        calendario: CalendarioFestivos,
+    ) -> list[Tramo]:
+        """Tramos de la misma semana ISO que quedaron antes del inicio del periodo.
+
+        `semanal_legal` mide contra la jornada máxima SEMANAL, y la semana no se
+        parte donde se parte la quincena: si el periodo arranca un miércoles, lo
+        trabajado el lunes y el martes ya gastó presupuesto de esa semana y se
+        pagó en la quincena anterior. Estos tramos solo alimentan el acumulado;
+        no se liquidan aquí. Las demás estrategias tienen umbral por turno, por
+        día o por periodo y no necesitan mirar hacia atrás.
+        """
+        if estrategia != SEMANAL_LEGAL:
+            return []
+        lunes = periodo.fecha_inicio - timedelta(days=periodo.fecha_inicio.weekday())
+        # Un día más atrás que el lunes: el turno del domingo anterior que cruza
+        # medianoche deja tramos en el lunes, y esos sí son de esta semana. Los
+        # tramos que caen en la semana anterior van a un acumulado que nadie usa.
+        previos = self.turnos.de_empleado_entre(
+            empleado_id, lunes - timedelta(days=1), periodo.fecha_inicio - timedelta(days=1)
+        )
+        return segmentar_turnos([r.turno for r in previos], parametros, calendario)

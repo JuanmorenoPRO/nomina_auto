@@ -30,6 +30,10 @@ from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import PeriodoLiquidacion
 from nomina.dominio.entidades.turno import TurnoRegistrado
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
+from nomina.infraestructura.persistencia.config_unidades import (
+    ESTRATEGIA_EXTRAS_VIGENTE,
+    FACTORES_OVERRIDE_VIGENTES,
+)
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
@@ -70,8 +74,8 @@ DESCUENTA_SS_OVERRIDE: dict[str, bool] = {datos.CASA_BLANCA_NOMBRE: False}
 
 def _config_unidad() -> ConfiguracionUnidad:
     return ConfiguracionUnidad(
-        estrategia_extras=datos.ESTRATEGIA_EXTRAS,
-        factores_override=dict(datos.FACTORES_OVERRIDE),
+        estrategia_extras=ESTRATEGIA_EXTRAS_VIGENTE,
+        factores_override=dict(FACTORES_OVERRIDE_VIGENTES),
     )
 
 
@@ -113,8 +117,8 @@ def _asegurar_config_unidades_existentes(session: Session) -> None:
             continue
         descuenta_ss = DESCUENTA_SS_OVERRIDE.get(unidad.nombre, True)
         config_ok = (
-            unidad.config.estrategia_extras == datos.ESTRATEGIA_EXTRAS
-            and unidad.config.factores_override == datos.FACTORES_OVERRIDE
+            unidad.config.estrategia_extras == ESTRATEGIA_EXTRAS_VIGENTE
+            and unidad.config.factores_override == FACTORES_OVERRIDE_VIGENTES
         )
         if config_ok and unidad.descuenta_seguridad_social == descuenta_ss:
             continue

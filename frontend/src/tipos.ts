@@ -137,6 +137,8 @@ export interface LiquidacionEmpleado {
   total_deducciones: number;
   neto_a_pagar: number;
   total: number;
+  /** Aviso, no un valor liquidado: horas no-extra que el salario no alcanza a cubrir. */
+  horas_sin_hora_base: string;
 }
 
 export interface Liquidacion {

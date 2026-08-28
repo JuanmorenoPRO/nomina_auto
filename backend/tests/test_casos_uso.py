@@ -275,3 +275,92 @@ def test_pagar_dia_31_reconoce_las_horas_fuera_del_presupuesto(session, contexto
     )
     assert dia_31.horas == 8
     assert dia_31.valor == Decimal(80_000)  # 8 h × 10.000, sin recargo: es hora base
+
+
+def test_semanal_legal_no_reinicia_la_semana_en_el_corte_de_quincena(session):
+    """La semana ISO no se parte donde se parte la quincena.
+
+    Semana lunes 10 – domingo 16 de agosto de 2026: 44 h caen en la quincena 1–15
+    y 12 h (el domingo) en la 16–31. La jornada máxima es 42 h/semana, así que las
+    12 h del domingo son todas extra. Antes, cada liquidación arrancaba el contador
+    en cero y esa semana recibía 42 h de presupuesto dos veces.
+    """
+    unidad = UnidadResidencial(
+        id=uuid4(),
+        nombre="Edificio Semanal P.H.",
+        nit="900333444",
+        config=ConfiguracionUnidad(estrategia_extras="semanal_legal"),
+    )
+    RepositorioUnidadesSQL(session).guardar(unidad)
+    empleado = Empleado(
+        id=uuid4(), unidad_id=unidad.id, nombre="ANA PRUEBA", documento="43111222",
+        cargo="aseo", salario_base=Decimal(2_100_000),
+    )
+    RepositorioEmpleadosSQL(session).guardar(empleado)
+    periodos = RepositorioPeriodosSQL(session)
+    primera = PeriodoLiquidacion(
+        id=uuid4(), fecha_inicio=date(2026, 8, 1), fecha_fin=date(2026, 8, 15)
+    )
+    segunda = PeriodoLiquidacion(
+        id=uuid4(), fecha_inicio=date(2026, 8, 16), fecha_fin=date(2026, 8, 31)
+    )
+    periodos.guardar(primera)
+    periodos.guardar(segunda)
+
+    for dia in (10, 11, 12, 13):  # 4 × 8 h
+        _registrar(session).ejecutar(empleado.id, date(2026, 8, dia), time(6), time(14))
+    _registrar(session).ejecutar(empleado.id, date(2026, 8, 15), time(6), time(18))  # 12 h
+    _registrar(session).ejecutar(empleado.id, date(2026, 8, 16), time(6), time(18))  # 12 h
+
+    # 1–15: 44 h en la semana → 2 h de extra diurna.
+    conceptos_1 = {
+        c.codigo: c
+        for c in _liquidar(session).ejecutar(primera.id, unidad.id).por_empleado[0].liquidacion.conceptos
+    }
+    assert int(conceptos_1["extra_diurna"].horas) == 2
+
+    # 16–31: el presupuesto de esa semana ya se agotó → las 12 h del domingo son
+    # extra dominical, no horas ordinarias festivas.
+    conceptos_2 = {
+        c.codigo: c
+        for c in _liquidar(session).ejecutar(segunda.id, unidad.id).por_empleado[0].liquidacion.conceptos
+    }
+    assert int(conceptos_2["extra_diurna_festiva"].horas) == 12
+    assert "festivo_diurno" not in conceptos_2
+
+
+def test_las_otras_estrategias_no_miran_la_quincena_anterior(session):
+    """Con `jornada` el umbral es por turno, así que el domingo de 12 h paga
+    8 h festivas + 4 h extra sin importar lo que se trabajó antes del corte."""
+    unidad = UnidadResidencial(
+        id=uuid4(),
+        nombre="Edificio Jornada P.H.",
+        nit="900555666",
+        config=ConfiguracionUnidad(estrategia_extras="jornada"),
+    )
+    RepositorioUnidadesSQL(session).guardar(unidad)
+    empleado = Empleado(
+        id=uuid4(), unidad_id=unidad.id, nombre="BETO PRUEBA", documento="43333444",
+        cargo="aseo", salario_base=Decimal(2_100_000),
+    )
+    RepositorioEmpleadosSQL(session).guardar(empleado)
+    periodos = RepositorioPeriodosSQL(session)
+    primera = PeriodoLiquidacion(
+        id=uuid4(), fecha_inicio=date(2026, 8, 1), fecha_fin=date(2026, 8, 15)
+    )
+    segunda = PeriodoLiquidacion(
+        id=uuid4(), fecha_inicio=date(2026, 8, 16), fecha_fin=date(2026, 8, 31)
+    )
+    periodos.guardar(primera)
+    periodos.guardar(segunda)
+    for dia in (10, 11, 12, 13):
+        _registrar(session).ejecutar(empleado.id, date(2026, 8, dia), time(6), time(14))
+    _registrar(session).ejecutar(empleado.id, date(2026, 8, 15), time(6), time(18))
+    _registrar(session).ejecutar(empleado.id, date(2026, 8, 16), time(6), time(18))
+
+    conceptos = {
+        c.codigo: c
+        for c in _liquidar(session).ejecutar(segunda.id, unidad.id).por_empleado[0].liquidacion.conceptos
+    }
+    assert int(conceptos["festivo_diurno"].horas) == 8
+    assert int(conceptos["extra_diurna_festiva"].horas) == 4

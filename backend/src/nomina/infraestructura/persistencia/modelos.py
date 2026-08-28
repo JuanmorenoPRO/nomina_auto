@@ -136,6 +136,9 @@ class LiquidacionEmpleadoModel(Base):
     nombre_empleado: Mapped[str] = mapped_column(String(200))
     salario_mensual: Mapped[int] = mapped_column(BigInteger)
     tarifa_hora: Mapped[str] = mapped_column(String(30))  # Decimal exacto como texto
+    # Alarma (no es un valor liquidado): minutos no-extra por encima de lo que el
+    # salario cubre. Ver `Liquidacion.minutos_sin_hora_base`.
+    minutos_sin_hora_base: Mapped[int] = mapped_column(Integer, default=0)
 
     liquidacion: Mapped[LiquidacionModel] = relationship(back_populates="empleados")
     conceptos: Mapped[list[ConceptoLiquidadoModel]] = relationship(

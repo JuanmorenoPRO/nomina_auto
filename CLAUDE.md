@@ -68,8 +68,16 @@ dominio  ←  aplicacion  ←  infraestructura
    corte por medianoche — no es un caso especial.
 2. **Invariante:** la suma de los minutos de los tramos = duración del turno, siempre.
 3. **Clasificación extra/ordinaria:** estrategia parametrizable
-   (`estrategia_clasificacion_extras`): `presupuesto_quincenal` (default, 110 h) o
-   `semanal_legal` (44/42 h por semana).
+   (`estrategia_clasificacion_extras`), cuatro opciones. **Default y criterio legal desde
+   el 15-jul-2026: `semanal_legal`** (42 h por semana). El trabajo suplementario es el que
+   excede la jornada ordinaria —8 h/día y 42 h/semana, CST art. 159 y 161, Ley 2101/2021—
+   y no se puede promediar ni reubicar. Las otras tres: `presupuesto_quincenal` (105 h de
+   la quincena; método de la contadora, **no es un criterio legal** — ver la regla de abajo),
+   `diaria` (8 h por día calendario) y `jornada` (8 h por turno continuo; es la regla del
+   art. 7 de la Ley 1920/2018 para vigilancia).
+   `semanal_legal` mide contra un presupuesto SEMANAL, así que la semana **no** se reinicia
+   en el corte de quincena: `LiquidarQuincena` carga los turnos previos de esa misma semana
+   y los pasa como `tramos_contexto` (consumen presupuesto, no se liquidan).
 4. **Modelo de pago ADICIONAL al salario** (calibrado con la planilla real de la
    contadora): el salario quincenal (110 h × tarifa = salario/2) cubre las horas
    ordinarias; cada tramo paga solo el factor adicional componible. Una nocturna
@@ -92,6 +100,15 @@ dominio  ←  aplicacion  ←  infraestructura
   1-jul-2026 y a 100% el 1-jul-2027, Ley 2466/2025).
 - **Vigencia:** rango de fechas `[vigente_desde, vigente_hasta]` en que un valor de
   parámetro legal aplica. Las vigencias de un mismo parámetro no se solapan.
+- **Divisor ≠ tope de jornada:** `horas_quincena` (105) y `divisor_hora_ordinaria` (210)
+  son un artificio de **mensualización** para hallar el valor de la hora ordinaria
+  (210 = 42/6 × 30, Concepto MinTrabajo 16177 de 2023). No son un límite de horas: usarlos
+  para decidir qué es hora extra confunde el denominador con el tope. Fue el error de fondo
+  de la planilla de agosto-2026 (`docs/reconciliacion-puebla-agosto-2026.md`).
+- **Horas sin hora base (alarma):** el tiempo ordinario se paga como presupuesto fijo, así
+  que si la estrategia de extras deja más horas no-extra de las que ese presupuesto y el
+  día 31 cubren, esas horas cobran su recargo pero no su hora base. `Liquidacion.
+  minutos_sin_hora_base` lo expone y la UI lo avisa en el detalle; no cambia ningún valor.
 - **Jornada ordinaria (marca por turno):** turno registrado solo para cuadrar las horas
   de la quincena, no porque se trabajara. Sus primeras N horas (`minutos_jornada_ordinaria`,
   digitado en el turno) no pagan recargo dominical/festivo ni nocturno — las cubre el
