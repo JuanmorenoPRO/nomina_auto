@@ -69,6 +69,12 @@ class Liquidacion:
     (`horas_quincena` + las horas del día 31). Esas horas cobran su recargo —o
     nada, si son ordinarias diurnas— pero no su hora base, porque el tiempo
     ordinario se paga como presupuesto fijo. Con 0 no hay nada que revisar.
+
+    `minutos_dia_31_bloqueados` es otra ALARMA: minutos del día 31 que quedaron
+    como extras (no nulos para el concepto DIA 31) porque la estrategia de extras
+    agotó el presupuesto antes del 31. Ocurre cuando `sin_extras=True` convierte
+    la estrategia a `presupuesto_quincenal` y el empleado ya trabajó ≥105 h en el
+    período anterior al 31. Con 0 el concepto DIA 31 captura todo lo que debía.
     """
 
     salario_mensual: Decimal
@@ -76,6 +82,7 @@ class Liquidacion:
     conceptos: tuple[ConceptoLiquidado, ...]
     deducciones: tuple[ConceptoLiquidado, ...] = ()
     minutos_sin_hora_base: int = 0
+    minutos_dia_31_bloqueados: int = 0
 
     @property
     def total_devengado(self) -> Decimal:

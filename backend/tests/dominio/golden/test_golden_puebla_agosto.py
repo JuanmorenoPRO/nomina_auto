@@ -136,11 +136,15 @@ def test_wilmar_16_31_con_el_turno_del_17_corregido():
 
 
 def test_maria_16_31_con_el_criterio_legal():
-    """132 h trabajadas repartidas en semanas de 12 / 50 / 62 / 8 h.
+    """132 h trabajadas en semanas de 56 / 50 / 62 / 8 h.
 
-    Con el tope de 42 h/semana salen 28 h de trabajo suplementario, contra las
+    La primera queda partida por el corte de quincena: 44 h se liquidaron en la
+    1–15 y 12 h caen aquí, con el presupuesto de esa semana ya gastado — por eso
+    esas 12 h son extra completas y por eso hace falta `tramos_contexto`.
+
+    Con el tope de 42 h/semana salen 40 h de trabajo suplementario, contra las
     20 h del umbral por turno. La contadora liquidó 34 h, pero cuadrando a 105 h
-    y con 7 h de festivo no trabajado dentro del presupuesto.
+    y con 7 h de una fila de festivo dentro del presupuesto.
     """
     liq = _criterio_legal(MARIA, SEGUNDA)
     assert _horas(liq) == {

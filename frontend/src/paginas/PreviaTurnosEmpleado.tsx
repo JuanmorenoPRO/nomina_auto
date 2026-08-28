@@ -657,6 +657,14 @@ export function PreviaTurnosEmpleado({
               presupuesto y sus horas se reconocen a hora base
             </label>
           )}
+          {sinExtras && pagarDia31 && dia31 !== undefined && (
+            <p className="aviso-advertencia" style={{ margin: 0 }}>
+              ⚠ &ldquo;Sin extras&rdquo; usa el presupuesto quincenal (105 h): si ese tope
+              se agota antes del 31, las horas de ese día quedan como extras y el concepto
+              DIA 31 no aparece en la liquidación. Para verlo, desactiva &ldquo;Sin
+              extras&rdquo;.
+            </p>
+          )}
         </div>
         <div className="fila" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="secundario" onClick={alCerrar}>

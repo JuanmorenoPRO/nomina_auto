@@ -223,6 +223,16 @@ function DetalleLiquidacion({ liquidacion }: { liquidacion: Liquidacion }) {
               registrados.
             </div>
           )}
+          {Number(emp.horas_dia_31_bloqueadas) > 0 && (
+            <div className="aviso-advertencia">
+              <b>{emp.horas_dia_31_bloqueadas} h del día 31 quedaron como extras</b> y no
+              aparecen en el concepto DIA 31. El flag &ldquo;Sin extras&rdquo; usa el
+              presupuesto quincenal (105 h); si ese tope se agotó antes del 31, las horas
+              de ese día son extras (ya incluyen la hora base en su factor). Para ver el
+              concepto DIA 31, desactiva &ldquo;Sin extras&rdquo; en la tarjeta del
+              empleado.
+            </div>
+          )}
           <table className="datos">
             <thead>
               <tr>
