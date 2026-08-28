@@ -139,6 +139,8 @@ export interface LiquidacionEmpleado {
   total: number;
   /** Aviso, no un valor liquidado: horas no-extra que el salario no alcanza a cubrir. */
   horas_sin_hora_base: string;
+  /** Aviso: horas del día 31 que quedaron como extras y no entraron en DIA 31. */
+  horas_dia_31_bloqueadas: string;
 }
 
 export interface Liquidacion {

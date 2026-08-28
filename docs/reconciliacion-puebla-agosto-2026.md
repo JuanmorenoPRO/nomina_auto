@@ -104,14 +104,14 @@ Solo para MARIA en esta quincena son **$22.512** que no se le pagaron.
 
 ## 6. Los cuatro escenarios
 
-MARIA, 16–31 de agosto. Horas por semana: **12 / 50 / 62 / 8**.
+MARIA, 16–31 de agosto. Horas por semana: **56 / 50 / 62 / 8**. La primera queda partida por el corte de quincena: 44 h se liquidaron en la 1–15 y 12 h caen aquí, pero el presupuesto de esa semana ya estaba gastado.
 
 | Criterio | Extras | Neto |
 |---|---|---|
 | Contadora (cuadre a 105 h, factores viejos) | 34 h | $1.945.363 |
 | Sistema anterior (8 h/turno, factores viejos) | 20 h | $1.795.019 |
 | Sistema anterior con factores corregidos | 20 h | $1.815.731 |
-| **Criterio legal (42 h/semana + factores vigentes)** | **28 h** | **$1.898.573** |
+| **Criterio legal (42 h/semana + factores vigentes)** | **40 h** | **$1.898.573** |
 
 La diferencia que la ley justifica es de **$103.554**, no de $150.344.
 

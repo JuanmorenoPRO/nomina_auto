@@ -214,6 +214,17 @@ def liquidar(
         if pagar_dia_31 and _dia_31 is not None
         else 0
     )
+    # Alarma: minutos del 31 que quedaron como extras y por eso no entraron en
+    # `minutos_dia_31`. Ocurre cuando la estrategia de extras (p. ej.
+    # `presupuesto_quincenal` forzada por `sin_extras=True`) agota el presupuesto
+    # antes del 31 — esas horas se pagan como extra (con hora base incluida en el
+    # factor), pero el usuario puede confundir la ausencia del concepto DIA 31 con
+    # un error. Con 0 el concepto DIA 31 capturó todo lo que debía.
+    minutos_dia_31_bloqueados = (
+        sum(t.minutos for t in tramos_clasificados if t.es_extra and t.fecha >= _dia_31)
+        if pagar_dia_31 and _dia_31 is not None
+        else 0
+    )
 
     # El auxilio prorratea sobre TODO lo laborado: el 31 es un día trabajado como
     # cualquier otro. El tiempo ordinario, en cambio, descuenta las horas del 31,
@@ -345,4 +356,5 @@ def liquidar(
         conceptos=tuple(conceptos),
         deducciones=tuple(deducciones),
         minutos_sin_hora_base=minutos_sin_hora_base,
+        minutos_dia_31_bloqueados=minutos_dia_31_bloqueados,
     )

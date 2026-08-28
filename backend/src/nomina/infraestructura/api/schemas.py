@@ -257,6 +257,10 @@ class LiquidacionEmpleadoRespuesta(BaseModel):
     # Alarma, no un valor liquidado: horas no-extra por encima de lo que cubre el
     # salario (presupuesto de la quincena + día 31). "0.00" = nada que revisar.
     horas_sin_hora_base: str = "0.00"
+    # Alarma: horas del día 31 que quedaron como extras y no entraron en DIA 31.
+    # Ocurre cuando `sin_extras=True` fuerza `presupuesto_quincenal` y el tope
+    # se agota antes del 31. "0.00" = el concepto DIA 31 capturó todo.
+    horas_dia_31_bloqueadas: str = "0.00"
 
 
 class LiquidacionRespuesta(BaseModel):

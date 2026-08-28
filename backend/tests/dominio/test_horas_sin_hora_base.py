@@ -71,3 +71,28 @@ def test_la_alarma_no_cambia_ningun_valor_liquidado():
     # El tiempo ordinario sigue siendo el presupuesto de la quincena, ni más ni menos.
     ordinario = next(c for c in liq.conceptos if c.codigo == "tiempo_ordinario")
     assert float(ordinario.horas) == 105.0
+
+
+def test_sin_extras_y_pagar_dia_31_expone_minutos_bloqueados():
+    """Con presupuesto_quincenal (lo que sin_extras=True fuerza) y turnos que agotan
+    las 105 h antes del 31, todas las horas del 31 quedan como extras y el concepto
+    DIA 31 no se genera. minutos_dia_31_bloqueados lo expone para que la UI pueda
+    avisar al usuario."""
+    # 16 días × 8 h = 128 h. El presupuesto de 105 h se agota antes del día 31,
+    # así que el turno del 31 queda íntegramente como extra.
+    turnos = _turnos_de_ocho(range(16, 32))
+    liq = _liquidar(turnos, "presupuesto_quincenal", pagar_dia_31=True)
+
+    codigos = [c.codigo for c in liq.conceptos]
+    assert "dia_31" not in codigos
+    assert liq.minutos_dia_31_bloqueados == 8 * 60
+
+
+def test_sin_extras_y_pagar_dia_31_bloqueados_cero_con_semanal_legal():
+    """Con semanal_legal el día 31 es lunes de la semana 36: presupuesto semanal
+    fresco → horas no-extra → el concepto DIA 31 sí aparece y bloqueados = 0."""
+    turnos = _turnos_de_ocho(range(16, 32))
+    liq = _liquidar(turnos, "semanal_legal", pagar_dia_31=True)
+
+    assert liq.minutos_dia_31_bloqueados == 0
+    assert any(c.codigo == "dia_31" for c in liq.conceptos)
