@@ -221,6 +221,15 @@ def liquidar(
     minutos_base_auxilio = min(minutos_no_extra, minutos_quincena_legal)
     minutos_base_ordinario = min(minutos_no_extra - minutos_dia_31, minutos_quincena_legal)
 
+    # Alarma: horas trabajadas no-extra que ni el presupuesto ni el día 31 cubren.
+    # El tiempo ordinario es un presupuesto fijo (`horas_quincena`), así que lo que
+    # sobrepasa esa base cobra su recargo pero no su hora base — y una ordinaria
+    # diurna por encima del tope no cobra nada. No cambia ningún valor liquidado:
+    # solo avisa que la estrategia de extras dejó demasiadas horas como ordinarias.
+    minutos_sin_hora_base = max(
+        0, minutos_no_extra - minutos_dia_31 - minutos_quincena_legal
+    )
+
     minutos_quincena = minutos_quincena_legal if quincena_completa else minutos_base_ordinario
     conceptos.append(
         ConceptoLiquidado(
@@ -335,4 +344,5 @@ def liquidar(
         tarifa_hora=tarifa_hora,
         conceptos=tuple(conceptos),
         deducciones=tuple(deducciones),
+        minutos_sin_hora_base=minutos_sin_hora_base,
     )

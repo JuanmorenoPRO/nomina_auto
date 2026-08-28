@@ -25,6 +25,10 @@ from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import PeriodoLiquidacion
 from nomina.dominio.entidades.turno import TurnoRegistrado
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
+from nomina.infraestructura.persistencia.config_unidades import (
+    ESTRATEGIA_EXTRAS_VIGENTE,
+    FACTORES_OVERRIDE_VIGENTES,
+)
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
     RepositorioConceptosManualesSQL,
@@ -40,8 +44,8 @@ from nomina.infraestructura.persistencia.repositorios import (
 
 def _config_thunapa() -> ConfiguracionUnidad:
     return ConfiguracionUnidad(
-        estrategia_extras=datos.ESTRATEGIA_EXTRAS,
-        factores_override=dict(datos.FACTORES_OVERRIDE),
+        estrategia_extras=ESTRATEGIA_EXTRAS_VIGENTE,
+        factores_override=dict(FACTORES_OVERRIDE_VIGENTES),
     )
 
 
@@ -52,8 +56,8 @@ def _asegurar_unidad(session: Session) -> UnidadResidencial:
     for existente in repo.listar():
         if existente.nombre == datos.NOMBRE_UNIDAD:
             config_ok = (
-                existente.config.estrategia_extras == datos.ESTRATEGIA_EXTRAS
-                and existente.config.factores_override == datos.FACTORES_OVERRIDE
+                existente.config.estrategia_extras == ESTRATEGIA_EXTRAS_VIGENTE
+                and existente.config.factores_override == FACTORES_OVERRIDE_VIGENTES
             )
             if config_ok and existente.descuenta_seguridad_social is False:
                 return existente

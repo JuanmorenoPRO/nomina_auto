@@ -17,6 +17,10 @@ from sqlalchemy.orm import Session
 
 from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
+from nomina.infraestructura.persistencia.config_unidades import (
+    ESTRATEGIA_EXTRAS_VIGENTE,
+    FACTORES_OVERRIDE_VIGENTES,
+)
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioEmpleadosSQL,
     RepositorioUnidadesSQL,
@@ -24,15 +28,6 @@ from nomina.infraestructura.persistencia.repositorios import (
 
 SALARIO_BASICO = Decimal("1750905")
 CARGO = "empleado"
-
-# Quincena 1-15 jul 2026: mismas planillas legadas que EDIFICIO PUEBLA P.H (factores
-# combinados viejos + umbral por turno continuo). Ver [[unidad-puebla-descuento-ss]].
-ESTRATEGIA_EXTRAS = "jornada"
-FACTORES_OVERRIDE: dict[str, Decimal] = {
-    "extra_diurna_festiva": Decimal("2.0"),
-    "extra_nocturna_festiva": Decimal("2.5"),
-    "festivo_nocturno": Decimal("2.1"),
-}
 
 # (nombre_unidad, nit, [(nombre_empleado, documento), ...])
 UNIDADES: list[tuple[str, str, list[tuple[str, str]]]] = [
@@ -104,8 +99,8 @@ def sembrar_unidades(session: Session) -> tuple[list[str], int]:
             nit=nit,
             descuenta_seguridad_social=True,
             config=ConfiguracionUnidad(
-                estrategia_extras=ESTRATEGIA_EXTRAS,
-                factores_override=dict(FACTORES_OVERRIDE),
+                estrategia_extras=ESTRATEGIA_EXTRAS_VIGENTE,
+                factores_override=dict(FACTORES_OVERRIDE_VIGENTES),
             ),
         )
         unidades_repo.guardar(unidad)

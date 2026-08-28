@@ -16,7 +16,12 @@ from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import PeriodoLiquidacion
 from nomina.dominio.entidades.turno import TurnoRegistrado
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
+from nomina.infraestructura.persistencia.config_unidades import (
+    ESTRATEGIA_EXTRAS_VIGENTE,
+    FACTORES_OVERRIDE_VIGENTES,
+)
 from nomina.infraestructura.persistencia.repositorios import (
+    RepositorioAjustesQuincenaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -40,8 +45,8 @@ def sembrar_puebla(session: Session) -> str | None:
         nit=puebla.NIT,
         descuenta_seguridad_social=True,
         config=ConfiguracionUnidad(
-            estrategia_extras=puebla.ESTRATEGIA_EXTRAS,
-            factores_override=dict(puebla.FACTORES_OVERRIDE),
+            estrategia_extras=ESTRATEGIA_EXTRAS_VIGENTE,
+            factores_override=dict(FACTORES_OVERRIDE_VIGENTES),
             conceptos_fijos=(puebla.CUOTA_MANEJO,),  # se aplica a todos los empleados
         ),
     )
@@ -99,6 +104,7 @@ def main() -> None:
             festivos=RepositorioFestivosSQL(session),
             liquidaciones=RepositorioLiquidacionesSQL(session),
             conceptos_manuales=RepositorioConceptosManualesSQL(session),
+            ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
         )
         from uuid import UUID
 

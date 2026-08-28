@@ -238,15 +238,32 @@ medianoche, no es un caso especial:
 `ClasificadorDeExtras` es una **estrategia** seleccionada por el parámetro
 `estrategia_clasificacion_extras` (con vigencias, como todo):
 
-- **`presupuesto_quincenal`** (default — método actual de la contadora): las primeras
-  `horas_quincena` (110 h) del periodo, en orden cronológico, son ordinarias; el
-  excedente es extra.
-- **`semanal_legal`**: acumulado por semana calendario contra `jornada_maxima_semanal`
-  vigente esa semana (44 h → 42 h el 15-jul-2026).
+- **`semanal_legal`** (default desde el 15-jul-2026): acumulado por semana calendario
+  contra `jornada_maxima_semanal` vigente esa semana (44 h → 42 h el 15-jul-2026). Es el
+  criterio de la ley: trabajo suplementario es el que excede la jornada ordinaria —8 h/día
+  y 42 h/semana— y no se puede promediar ni reubicar (CST art. 159 y 161, Ley 2101/2021).
+- **`presupuesto_quincenal`** (default hasta el 14-jul-2026 — método de la contadora): las
+  primeras `horas_quincena` del periodo, en orden cronológico, son ordinarias; el excedente
+  es extra. **No es un criterio legal**: `horas_quincena` y `divisor_hora_ordinaria` son un
+  artificio de mensualización para hallar el valor de la hora (210 h = 42/6 × 30, Concepto
+  MinTrabajo 16177 de 2023), no un tope de jornada. Se conserva para reproducir planillas
+  históricas y para la marca `sin_extras`.
+- **`diaria`**: umbral por día calendario (`horas_jornada_diaria`, 8 h). La cola de un turno
+  que cruzó medianoche cuenta en el día siguiente.
+- **`jornada`**: umbral por TURNO o jornada continua — los tramos contiguos, aunque crucen
+  medianoche, son una sola jornada; un descanso abre otra. Es la regla del art. 7 de la Ley
+  1920/2018 para el sector de vigilancia (turnos de hasta 12 h con la jornada ordinaria en
+  8 h). Legal, pero más estrecha que el tope semanal.
 
 Si el umbral cae dentro de un tramo, el tramo se parte en dos. La clasificación conserva
 franja y tipo de día: una extra nocturna dominical sigue siendo identificable. El golden
-test 5 (quincena que cruza el 15-jul-2026) se prueba con ambas estrategias.
+test 5 (quincena que cruza el 15-jul-2026) se prueba con dos estrategias.
+
+**La semana no se parte donde se parte la quincena.** `semanal_legal` mide contra un
+presupuesto SEMANAL, así que una semana partida por el corte de quincena recibiría 42 h
+dos veces. `LiquidarQuincena` carga los turnos de esa semana anteriores al periodo y los
+pasa como `tramos_contexto`: consumen presupuesto y no se liquidan (ya se pagaron en su
+quincena). Las otras tres estrategias los ignoran.
 
 ### 5.3 Factores componibles — modelo de pago ADICIONAL al salario
 
@@ -304,12 +321,16 @@ sistema ni la de liquidación).
 `valor = minutos / 60 × tarifa_hora × factor`, con
 `tarifa_hora = salario_base_mensual / divisor_hora_ordinaria`.
 
-⚠️ **Discrepancia detectada en la planilla de la contadora (mayo 2026):** usa el
-festivo diurno actualizado (×1.80) pero los factores combinados viejos
-(FESTIVO EXTRA ×2.00, NOCTURNO DOMINICAL ×2.10, EXTRA NOCTURNO DOMINICAL ×2.50),
-que corresponden al recargo dominical del 75% anterior a la Ley 2466/2025. El
-modelo aditivo con el 80% vigente da 2.05 / 2.15 / 2.55. Confirmar con ella cuál
-debe prevalecer; el motor sigue los parámetros vigentes.
+⚠️ **Factores combinados legados — resuelto el 27-ago-2026.** La planilla de la contadora
+usa el festivo diurno actualizado pero los combinados viejos (FESTIVO EXTRA ×2.00,
+NOCTURNO DOMINICAL ×2.10, EXTRA NOCTURNO DOMINICAL ×2.50), armados con el recargo
+dominical del 75 % anterior a la Ley 2466/2025. Con el 90 % vigente desde el 1-jul-2026
+el modelo aditivo da **2.15 / 2.25 / 2.65**, y son los correctos: el override pagaba de
+menos. Las unidades se sembraban con esa tabla en `config.factores_override`; la migración
+`f2a7c91d40e8` la quita y el motor vuelve a calcularlos de forma aditiva. Los módulos de
+referencia (`puebla.py`, `julio_1_15.py`, `thunapa.py`, `rio_claro_16_31.py`) conservan
+`FACTORES_OVERRIDE` porque sus golden tests reproducen la planilla histórica al peso.
+Ver `docs/reconciliacion-puebla-agosto-2026.md`.
 
 ### 5.4 Política de redondeo
 

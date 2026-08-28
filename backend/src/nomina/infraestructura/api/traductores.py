@@ -98,6 +98,7 @@ def liquidacion_a_schema(liq: LiquidacionQuincena) -> LiquidacionRespuesta:
             total_deducciones=int(le.liquidacion.total_deducciones),
             neto_a_pagar=int(le.liquidacion.neto_a_pagar),
             total=int(le.liquidacion.total),
+            horas_sin_hora_base=f"{le.liquidacion.minutos_sin_hora_base / 60:.2f}",
         )
         for le in liq.por_empleado
     ]

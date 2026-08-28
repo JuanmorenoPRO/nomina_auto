@@ -254,6 +254,9 @@ class LiquidacionEmpleadoRespuesta(BaseModel):
     total_deducciones: int
     neto_a_pagar: int
     total: int  # alias histórico = total_devengado
+    # Alarma, no un valor liquidado: horas no-extra por encima de lo que cubre el
+    # salario (presupuesto de la quincena + día 31). "0.00" = nada que revisar.
+    horas_sin_hora_base: str = "0.00"
 
 
 class LiquidacionRespuesta(BaseModel):

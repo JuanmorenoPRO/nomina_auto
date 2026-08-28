@@ -214,6 +214,15 @@ function DetalleLiquidacion({ liquidacion }: { liquidacion: Liquidacion }) {
           <h3>
             {emp.nombre} — CC {emp.documento} · salario $ {pesos.format(emp.salario_mensual)}
           </h3>
+          {Number(emp.horas_sin_hora_base) > 0 && (
+            <div className="error">
+              <b>{emp.horas_sin_hora_base} horas trabajadas sin hora base.</b> El tiempo
+              ordinario se paga como presupuesto fijo de la quincena, así que estas horas
+              cobran su recargo pero no la hora base — y si son ordinarias diurnas, no
+              cobran nada. Revise el criterio de horas extra de la unidad o los turnos
+              registrados.
+            </div>
+          )}
           <table className="datos">
             <thead>
               <tr>

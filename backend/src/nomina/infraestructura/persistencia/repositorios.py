@@ -496,6 +496,7 @@ class RepositorioLiquidacionesSQL:
                 nombre_empleado=le.empleado.nombre,
                 salario_mensual=int(le.liquidacion.salario_mensual),
                 tarifa_hora=str(le.liquidacion.tarifa_hora),
+                minutos_sin_hora_base=le.liquidacion.minutos_sin_hora_base,
             )
             lineas = [(DEVENGADO, c) for c in le.liquidacion.conceptos]
             lineas += [(DEDUCCION, d) for d in le.liquidacion.deducciones]
@@ -581,6 +582,7 @@ class RepositorioLiquidacionesSQL:
                         tarifa_hora=Decimal(le.tarifa_hora),
                         conceptos=conceptos,
                         deducciones=deducciones,
+                        minutos_sin_hora_base=le.minutos_sin_hora_base or 0,
                     ),
                 )
             )

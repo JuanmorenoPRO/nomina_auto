@@ -30,9 +30,10 @@ PARAMETROS_SEMILLA: tuple[ParametroLegal, ...] = (
     _p("recargo_dominical_festivo", "0.80", date(2025, 7, 1), date(2026, 6, 30), "Ley 2466/2025"),
     _p("recargo_dominical_festivo", "0.90", date(2026, 7, 1), date(2027, 6, 30), "Ley 2466/2025"),
     _p("recargo_dominical_festivo", "1.00", date(2027, 7, 1), None, "Ley 2466/2025"),
-    # Reducción escalonada de la jornada máxima semanal, Ley 2101/2021
-    _p("jornada_maxima_semanal", "46", date(2023, 7, 15), date(2024, 7, 14), "Ley 2101/2021"),
-    _p("jornada_maxima_semanal", "45", date(2024, 7, 15), date(2025, 7, 14), "Ley 2101/2021"),
+    # Reducción escalonada de la jornada máxima semanal, Ley 2101/2021:
+    # 47 h (15-jul-2023), 46 h (15-jul-2024), 44 h (15-jul-2025), 42 h (15-jul-2026).
+    _p("jornada_maxima_semanal", "47", date(2023, 7, 15), date(2024, 7, 14), "Ley 2101/2021"),
+    _p("jornada_maxima_semanal", "46", date(2024, 7, 15), date(2025, 7, 14), "Ley 2101/2021"),
     _p("jornada_maxima_semanal", "44", date(2025, 7, 15), date(2026, 7, 14), "Ley 2101/2021"),
     _p("jornada_maxima_semanal", "42", date(2026, 7, 15), None, "Ley 2101/2021"),
     # Horas ordinarias de la quincena y divisor de mensualización: bajan con la reducción
@@ -49,8 +50,17 @@ PARAMETROS_SEMILLA: tuple[ParametroLegal, ...] = (
     # Auxilio de transporte (mensual) — verificar decreto de cada año
     _p("auxilio_transporte_mensual", "200000", date(2025, 1, 1), date(2025, 12, 31), "Dec. 1573/2024"),
     _p("auxilio_transporte_mensual", "249095", date(2026, 1, 1), None, "planilla contadora 2026"),
-    _p("estrategia_clasificacion_extras", "presupuesto_quincenal", date(2000, 1, 1), None,
-       "decisión de negocio: método actual de la contadora"),
+    # Estrategia por defecto para unidades sin `config.estrategia_extras` propio.
+    # Hasta el 14-jul-2026, el método de la contadora (presupuesto de la quincena).
+    # Desde el 15-jul-2026 el criterio legal: trabajo suplementario es el que excede
+    # la jornada ordinaria — 8 h/día y 42 h/semana (CST art. 159 y 161, Ley 2101/2021).
+    # Un presupuesto quincenal/mensual de horas no es un tope de jornada: el divisor
+    # (210 h = 42/6 × 30, Concepto MinTrabajo 16177 de 2023) solo sirve para hallar el
+    # valor de la hora ordinaria.
+    _p("estrategia_clasificacion_extras", "presupuesto_quincenal", date(2000, 1, 1),
+       date(2026, 7, 14), "decisión de negocio: método de la contadora"),
+    _p("estrategia_clasificacion_extras", "semanal_legal", date(2026, 7, 15), None,
+       "CST art. 159 y 161; Ley 2101/2021"),
     # Tasas para apropiaciones de seguridad social (segunda quincena)
     _p("aprop_sena", "0.02", date(2000, 1, 1), None, "Ley 21/1982 art. 7"),
     _p("aprop_icbf", "0.03", date(2000, 1, 1), None, "Ley 89/1988 art. 1"),

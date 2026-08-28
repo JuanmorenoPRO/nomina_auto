@@ -63,12 +63,19 @@ class Liquidacion:
 
     `conceptos` son los devengados; `deducciones` los descuentos (salud, pensión,
     otras). El neto a pagar = total devengado − total deducciones.
+
+    `minutos_sin_hora_base` es una ALARMA, no un valor liquidado: son los minutos
+    trabajados no-extra que se quedaron por encima de lo que el salario cubre
+    (`horas_quincena` + las horas del día 31). Esas horas cobran su recargo —o
+    nada, si son ordinarias diurnas— pero no su hora base, porque el tiempo
+    ordinario se paga como presupuesto fijo. Con 0 no hay nada que revisar.
     """
 
     salario_mensual: Decimal
     tarifa_hora: Decimal
     conceptos: tuple[ConceptoLiquidado, ...]
     deducciones: tuple[ConceptoLiquidado, ...] = ()
+    minutos_sin_hora_base: int = 0
 
     @property
     def total_devengado(self) -> Decimal:
