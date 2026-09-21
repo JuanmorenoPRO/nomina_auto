@@ -145,7 +145,13 @@ dominio  ←  aplicacion  ←  infraestructura
   por día). Se descarga llena con lo que hay en la base y se vuelve a subir para importar.
   Las horas se escriben como **texto** en columnas de formato General a propósito: con
   formato de hora, un `18` digitado en Excel se guardaría como el serial 18 y se leería
-  como 00:00 (error de horas silencioso).
+  como 00:00 (error de horas silencioso). `TOTAL H` y `TOTAL QUINCENA` son **fórmulas**
+  (`_formula_total_horas`), largas porque tienen que aceptar los cuatro formatos que Excel
+  puede guardar en esa celda (texto `06:00`, hora real, `18`, `6,5`); el cruce de
+  medianoche sale del `MOD(...,1)` y entrada = salida son 24 h, igual que en el dominio.
+  La importación las ignora y recalcula. Como una fórmula sin valor cacheado se lee como
+  celda vacía —y una celda de hora vacía es un descanso—, el lector compara contra una
+  segunda pasada sin `data_only` y reporta la fila en vez de borrar turnos en silencio.
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).

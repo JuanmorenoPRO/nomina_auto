@@ -208,6 +208,13 @@ def _mapa_columnas(fila: tuple[Any, ...]) -> dict[str, int]:
     return mapa
 
 
+def _primeras_filas(pagina: Any) -> list[tuple[Any, ...]]:
+    return [
+        fila
+        for _, fila in zip(range(MAXIMO_FILAS), pagina.iter_rows(values_only=True), strict=False)
+    ]
+
+
 def _celda(fila: tuple[Any, ...], columna: int | None) -> Any:
     if columna is None or columna >= len(fila):
         return None
@@ -256,7 +263,19 @@ def _texto_documento(valor: Any) -> str:
     return str(valor).strip()
 
 
-def _leer_hoja(nombre: str, filas: list[tuple[Any, ...]]) -> HojaTurnos | None:
+def _es_formula_sin_calcular(valor: Any, crudo: Any) -> bool:
+    """La celda trae una fórmula que Excel nunca calculó.
+
+    `data_only=True` devuelve el valor cacheado de una fórmula, y un archivo que
+    no pasó por Excel no tiene ese caché: la celda llega vacía. En una celda de
+    hora eso se leería como descanso y borraría los turnos del día sin avisar.
+    """
+    return valor is None and isinstance(crudo, str) and crudo.startswith("=")
+
+
+def _leer_hoja(
+    nombre: str, filas: list[tuple[Any, ...]], crudas: list[tuple[Any, ...]]
+) -> HojaTurnos | None:
     indice = _fila_encabezado(filas)
     if indice is None:
         return None  # no es una hoja de turnos (INSTRUCCIONES, RESUMEN, notas…)
@@ -285,6 +304,33 @@ def _leer_hoja(nombre: str, filas: list[tuple[Any, ...]]) -> HojaTurnos | None:
         bruto_entra = _celda(fila, columnas.get("entra"))
         bruto_sale = _celda(fila, columnas.get("sale"))
         bruto_jornada = _celda(fila, columnas.get("jornada"))
+
+        # `desplazamiento` es el número de fila de Excel (1-based) y `crudas` es
+        # una lista 0-based: la fila N está en crudas[N - 1].
+        indice_crudo = desplazamiento - 1
+        cruda = crudas[indice_crudo] if indice_crudo < len(crudas) else ()
+        pendientes = [
+            etiqueta
+            for etiqueta, valor, clave in (
+                ("ENTRA", bruto_entra, "entra"),
+                ("SALE", bruto_sale, "sale"),
+                ("JORN. ORD.", bruto_jornada, "jornada"),
+            )
+            if _es_formula_sin_calcular(valor, _celda(cruda, columnas.get(clave)))
+        ]
+        if pendientes:
+            filas_turno.append(
+                FilaTurno(
+                    fila=desplazamiento,
+                    dia_del_mes=dia if dia is not None else ultimo_dia,
+                    error=(
+                        f"La celda {' y '.join(pendientes)} tiene una fórmula que Excel no "
+                        "ha calculado. Abra el archivo en Excel, guárdelo y vuelva a subirlo."
+                    ),
+                )
+            )
+            continue
+
         if bruto_entra is None and bruto_sale is None:
             continue  # descanso
 
@@ -332,6 +378,9 @@ def leer_plantilla_turnos(contenido: bytes) -> LibroTurnos:
 
     try:
         libro = load_workbook(BytesIO(contenido), read_only=True, data_only=True)
+        # Segunda pasada con las fórmulas a la vista, para distinguir una celda
+        # vacía de una fórmula que Excel no calculó (ver `_es_formula_sin_calcular`).
+        libro_crudo = load_workbook(BytesIO(contenido), read_only=True, data_only=False)
     except Exception as e:  # openpyxl lanza de todo: BadZipFile, KeyError, InvalidFile…
         raise ValueError(
             "No se pudo leer el archivo como Excel (.xlsx). Si es un .xls antiguo, "
@@ -345,14 +394,9 @@ def leer_plantilla_turnos(contenido: bytes) -> LibroTurnos:
         hojas: list[HojaTurnos] = []
         ignoradas: list[str] = []
         for nombre in libro.sheetnames:
-            pagina = libro[nombre]
-            filas = [
-                fila
-                for _, fila in zip(
-                    range(MAXIMO_FILAS), pagina.iter_rows(values_only=True), strict=False
-                )
-            ]
-            hoja = _leer_hoja(nombre, filas)
+            hoja = _leer_hoja(
+                nombre, _primeras_filas(libro[nombre]), _primeras_filas(libro_crudo[nombre])
+            )
             if hoja is None:
                 ignoradas.append(nombre)
             else:
@@ -360,3 +404,4 @@ def leer_plantilla_turnos(contenido: bytes) -> LibroTurnos:
         return LibroTurnos(hojas=tuple(hojas), ignoradas=tuple(ignoradas))
     finally:
         libro.close()
+        libro_crudo.close()
