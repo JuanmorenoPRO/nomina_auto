@@ -598,3 +598,69 @@ def test_archivo_demasiado_grande_se_rechaza(client, escenario):
     r = subir(client, periodo["id"], unidad["id"], b"x" * (TAMANO_MAXIMO + 10))
     assert r.status_code == 409, r.text
     assert "MB" in r.json()["detail"]
+
+
+def test_la_plantilla_trae_las_horas_formuladas(client, escenario):
+    """TOTAL H se calcula en Excel desde ENTRA/SALE, y el pie suma la columna:
+    así la contadora cuadra las horas antes de subir el archivo.
+
+    (Que las fórmulas den el número correcto se verifica recalculando el libro
+    con LibreOffice; aquí solo se comprueba que estén y que el rango cuadre.)
+    """
+    from openpyxl import load_workbook
+
+    unidad, periodo = escenario["unidad"], escenario["periodo"]
+    r = client.get(f"/periodos/{periodo['id']}/turnos/plantilla?unidad_id={unidad['id']}")
+    assert r.status_code == 200, r.text
+
+    hoja = load_workbook(BytesIO(r.content))["ANA GOMEZ"]
+    encabezado = next(
+        f[0].row for f in hoja.iter_rows(max_col=3) if f[2].value == "ENTRA"
+    )
+    dias_de_la_quincena = 15  # 1 al 15 de septiembre
+    primera, ultima = encabezado + 1, encabezado + dias_de_la_quincena
+
+    for numero in range(primera, ultima + 1):
+        formula = hoja.cell(row=numero, column=6).value
+        assert formula.startswith("=IFERROR("), (numero, formula)
+        assert f"C{numero}" in formula and f"D{numero}" in formula
+
+    assert hoja.cell(row=ultima + 1, column=1).value == "TOTAL QUINCENA"
+    assert hoja.cell(row=ultima + 1, column=6).value == f"=SUM(F{primera}:F{ultima})"
+
+
+def test_celda_de_hora_con_formula_sin_calcular_se_reporta(client, escenario):
+    """Una fórmula que Excel nunca calculó llega vacía al lector: sin esta
+    guarda se leería como descanso y borraría los turnos del día en silencio."""
+    from openpyxl import load_workbook
+
+    unidad, periodo = escenario["unidad"], escenario["periodo"]
+    ana = escenario["empleados"][0]
+    r = client.post(
+        "/turnos",
+        json={
+            "empleado_id": ana["id"],
+            "fecha": "2026-09-01",
+            "hora_inicio": "06:00",
+            "hora_fin": "18:00",
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    base = construir_libro(
+        [{"nombre": "ANA GOMEZ", "documento": "1032456", "filas": [(1, "06:00", "18:00", None)]}]
+    )
+    libro = load_workbook(BytesIO(base))
+    libro["ANA GOMEZ"]["C8"] = "=B8"  # fórmula sin valor cacheado
+    roto = BytesIO()
+    libro.save(roto)
+
+    respuesta = subir(client, periodo["id"], unidad["id"], roto.getvalue())
+    reporte = respuesta.json()
+    assert reporte["aplicado"] is False
+    assert reporte["errores"][0]["fila"] == 8
+    assert "fórmula" in reporte["errores"][0]["mensaje"]
+    # y el turno que ya estaba sigue ahí
+    assert turnos_de(client, periodo["id"], unidad["id"], ana["id"]) == [
+        ("2026-09-01", "06:00:00", "18:00:00", None)
+    ]

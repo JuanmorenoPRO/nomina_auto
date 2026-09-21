@@ -11,6 +11,9 @@ hora, escribir `18` en Excel se guardaría como el serial 18 (18 días) y se
 leería como 00:00 — un error de horas silencioso. En General, `18` queda como el
 número 18 y el lector lo entiende como 18:00, `18:30` queda como hora y `6,5`
 como 6.5; las tres se leen bien.
+
+Eso es también lo que hace larga a la fórmula de TOTAL H: tiene que aceptar esos
+cuatro formatos (ver `_formula_total_horas`).
 """
 
 from __future__ import annotations
@@ -71,6 +74,39 @@ def _horas(minutos: int) -> float | int:
 
 def _hhmm(hora: object) -> str:
     return f"{hora:%H:%M}"  # type: ignore[str-format]
+
+
+def _como_fraccion_de_dia(ref: str) -> str:
+    """Normaliza una celda de hora a fracción de día, sea lo que sea que haya
+    digitado la contadora. Excel guarda cuatro cosas distintas en esa celda:
+
+    - `06:00` escrito por la plantilla → texto      → `TIMEVALUE` → 0.25
+    - `18:30` digitado                → hora real   → número < 1, ya es fracción
+    - `18` digitado                   → número 18   → son horas: `/24`
+    - `6,5` digitado                  → número 6.5  → son horas: `/24`
+
+    El `&":00"` es para un `"6"` que haya quedado como texto.
+    """
+    return (
+        f"IF(ISNUMBER({ref}),IF({ref}>=1,{ref}/24,{ref}),"
+        f'TIMEVALUE(IF(ISERROR(FIND(":",{ref})),{ref}&":00",{ref})))'
+    )
+
+
+def _formula_total_horas(fila: int) -> str:
+    """Horas del turno de esa fila, calculadas por Excel.
+
+    `MOD(...,1)` es lo que resuelve el cruce de medianoche (18:00→06:00 son 12 h,
+    no −12), y entrada igual a salida son 24 h: la misma semántica que
+    `Turno.intervalo()`. Sin horario la celda queda vacía (descanso, no cero) y
+    con una hora ilegible muestra «?» en vez de inventar un número.
+    """
+    ini = _como_fraccion_de_dia(f"C{fila}")
+    fin = _como_fraccion_de_dia(f"D{fila}")
+    return (
+        f'=IFERROR(IF(OR(C{fila}="",D{fila}=""),"",'
+        f'IF({ini}={fin},24,MOD({fin}-{ini},1)*24)),"?")'
+    )
 
 
 def _hoja_empleado(
@@ -136,6 +172,9 @@ def _hoja_empleado(
             etiqueta_dia = _abreviatura(dia) + (f" {MARCA_FESTIVO}" if es_festivo else "")
             hoja.cell(row=fila, column=1, value=etiqueta_dia)
             hoja.cell(row=fila, column=2, value=dia.day)
+            # La fórmula va en TODAS las filas, también en las de descanso: así
+            # el total aparece solo en cuanto se le escriba un horario.
+            hoja.cell(row=fila, column=6, value=_formula_total_horas(fila))
             if turno is not None:
                 hoja.cell(row=fila, column=3, value=_hhmm(turno.hora_inicio))
                 hoja.cell(row=fila, column=4, value=_hhmm(turno.hora_fin))
@@ -143,7 +182,6 @@ def _hoja_empleado(
                     hoja.cell(
                         row=fila, column=5, value=_horas(turno.minutos_jornada_ordinaria)
                     )
-                hoja.cell(row=fila, column=6, value=_horas(turno.minutos))
             for columna in range(1, len(COLUMNAS) + 1):
                 celda = hoja.cell(row=fila, column=columna)
                 celda.border = BORDE_CELDA
@@ -151,10 +189,14 @@ def _hoja_empleado(
                 if especial:
                     celda.fill = RELLENO_FESTIVO
 
+    ultima_fila_datos = fila
     fila += 1
     hoja.cell(row=fila, column=1, value="TOTAL QUINCENA").font = NEGRITA
-    total = sum(t.turno.minutos for t in turnos)
-    celda_total = hoja.cell(row=fila, column=6, value=_horas(total))
+    celda_total = hoja.cell(
+        row=fila,
+        column=6,
+        value=f"=SUM(F{fila_encabezado + 1}:F{ultima_fila_datos})",
+    )
     celda_total.font = NEGRITA
     celda_total.border = BORDE_CELDA
 
@@ -191,7 +233,9 @@ _INSTRUCCIONES = [
     ("  archivo no se tocan.", None),
     ("• La importación no crea empleados: si una C.C. no existe en la unidad, el", None),
     ("  archivo se rechaza completo y no se guarda nada.", None),
-    ("• Las columnas DÍA y TOTAL H son informativas: se recalculan al importar.", None),
+    ("• TOTAL H y TOTAL QUINCENA se calculan solos: no escriba encima de esas", None),
+    ("  celdas. Si agrega una fila para un turno partido, copie la fórmula de", None),
+    ("  TOTAL H de la fila de arriba. Al importar se recalculan de todos modos.", None),
     ("• Puede agregar o quitar filas y columnas; el encabezado de la tabla se", None),
     ("  reconoce por los títulos ENTRA y SALE.", None),
     ("• Guarde el archivo como .xlsx (no .xls).", None),

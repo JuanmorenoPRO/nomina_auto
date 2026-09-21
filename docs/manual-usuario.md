@@ -251,6 +251,7 @@ escribirla celda por celda. Junto a los selectores hay dos botones:
 | **N.º** | El día del mes. Es lo único con lo que el sistema ubica la fila |
 | **ENTRA** / **SALE** | El horario: `06:00`, `6`, `18:30` o `6,5` |
 | **JORN. ORD. (h)** | Solo en los turnos de *jornada ordinaria* (§6): las horas que cubre el salario |
+| **TOTAL H** | No se escribe: es una fórmula y se calcula sola |
 
 - Si la salida es **menor o igual** que la entrada, el turno **cruza la medianoche**
   (`18:00` a `06:00` son 12 horas).
@@ -259,7 +260,11 @@ escribirla celda por celda. Junto a los selectores hay dos botones:
 - Las filas **SÍ/NO** del encabezado son las marcas de la quincena (quincena incompleta,
   sin extras, auxilio prorrateado, día 31). Si borra la fila entera, la marca que haya en
   el sistema **no se modifica**.
-- Las columnas **DÍA** y **TOTAL H** son informativas: se recalculan al importar.
+- **TOTAL H** y **TOTAL QUINCENA** se calculan solos: son fórmulas que suman las horas a
+  medida que usted escribe los horarios, incluidos los turnos que cruzan la medianoche. No
+  escriba encima de esas celdas; si agrega una fila para un turno partido, copie la fórmula
+  de **TOTAL H** de la fila de arriba. La columna **DÍA** es informativa. Nada de esto se
+  importa: el sistema recalcula las horas por su cuenta.
 - Puede agregar o quitar filas: el encabezado de la tabla se reconoce por los títulos
   **ENTRA** y **SALE**, no por su posición.
 
