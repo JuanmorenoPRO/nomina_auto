@@ -141,6 +141,11 @@ dominio  ←  aplicacion  ←  infraestructura
   **sí** cuentan: su marca significa «esto lo cubre el salario», y el 31 no lo cubre.
   No toca el auxilio, que sigue siendo el de 15 días.
   Referencia verificada: `tests/dominio/golden/test_golden_rio_claro_16_31.py`.
+- **Plantilla de turnos:** el cuadro de turnos como Excel (una hoja por empleado, una fila
+  por día). Se descarga llena con lo que hay en la base y se vuelve a subir para importar.
+  Las horas se escriben como **texto** en columnas de formato General a propósito: con
+  formato de hora, un `18` digitado en Excel se guardaría como el serial 18 y se leería
+  como 00:00 (error de horas silencioso).
 - **Liquidación:** resultado de calcular una quincena; inmutable una vez cerrada.
 - **Cierre:** paso a solo lectura de una quincena aprobada; ya no se puede reliquidar.
   Mientras esté abierta, reliquidar reemplaza la liquidación previa (solo la última).
@@ -192,6 +197,17 @@ por eso el dev server usa 5174 y el backend 8001.
       en liquidación/Excel, conceptos manuales (devengados/deducciones por empleado+periodo),
       estrategia de extras `diaria` (umbral 8 h/día) y factores por unidad (`config`).
       Unidad de referencia EDIFICIO PUEBLA P.H en `nomina/puebla.py` + golden test.
+
+- [x] **Importación de turnos desde Excel:** plantilla con una hoja por empleado en el
+      formato de la tarjeta de turnos (`infraestructura/excel/plantilla_turnos.py`), lector
+      tolerante (`importador.py`, único con openpyxl de lectura) y caso de uso
+      `ImportarTurnos`. Endpoints `GET /periodos/{id}/turnos/plantilla` y
+      `POST /periodos/{id}/turnos/importar` (rol operador). Reglas: el empleado se
+      identifica por la **C.C.** del encabezado; los turnos del periodo de cada empleado
+      que venga en el archivo se **reemplazan**; no se crean empleados; y es **todo o
+      nada** (se valida el libro completo y con un solo error no se escribe nada, con
+      `validar_solo=true` para previsualizar). La descarga es además la primera
+      exportación del cuadro de turnos que tiene la app.
 
 **Todas las fases del plan original están completas.** Pendientes de negocio (ver
 memoria/docs): confirmar con la contadora los factores combinados y su regla real de

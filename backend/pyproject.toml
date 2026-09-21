@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "openpyxl>=3.1",
+    "python-multipart>=0.0.9",  # uploads (importación de turnos)
     "uvicorn>=0.30",
     "argon2-cffi>=23.1",
     "email-validator>=2.0",

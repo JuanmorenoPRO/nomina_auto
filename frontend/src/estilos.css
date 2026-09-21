@@ -57,14 +57,18 @@ button.principal, a.principal {
   display: inline-block;
 }
 button.principal:disabled { background: #94a3b8; cursor: not-allowed; }
-button.secundario {
+button.secundario, a.secundario {
   background: white;
   border: 1px solid #cbd5e1;
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
+  color: #0f172a;
+  text-decoration: none;
+  display: inline-block;
 }
+button.secundario:disabled { color: #94a3b8; cursor: not-allowed; }
 button.peligro {
   background: white;
   color: #b91c1c;
@@ -246,6 +250,17 @@ table.grilla td.total.fila-activa { background: var(--resalte-linea); }
 
 /* Cruz médica junto al nombre de un empleado incapacitado (grilla y tarjeta) */
 .marca-incapacitado { color: #dc2626; font-weight: 700; cursor: help; }
+
+/* Tarjeta modal de importación de turnos desde Excel */
+.modal-importar {
+  width: min(760px, 94vw);
+  max-height: 92vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.modal-importar .previa-scroll { max-height: 46vh; }
+.modal-importar input[type="file"] { font-size: 13px; }
 
 /* Tarjeta modal de previsualización/edición de turnos por empleado */
 .modal-previa {

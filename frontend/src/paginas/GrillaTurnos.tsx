@@ -13,6 +13,7 @@ import {
   normalizarHora,
   ventanaJornadaOrdinaria,
 } from "../turnos-util";
+import { ImportarTurnos } from "./ImportarTurnos";
 import { PreviaTurnosEmpleado } from "./PreviaTurnosEmpleado";
 
 /** Referencia estable para celdas sin turnos: evita romper la memoización. */
@@ -30,6 +31,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
   const [error, setError] = useState("");
   const [activa, setActiva] = useState<CeldaActiva>(null);
   const [empleadoPrevia, setEmpleadoPrevia] = useState<Empleado | null>(null);
+  const [importando, setImportando] = useState(false);
 
   // Callback estable: solo cambia el estado si la celda activa es distinta,
   // para no re-renderizar celdas ya resaltadas.
@@ -204,6 +206,28 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
             ))}
           </select>
         </label>
+        {unidadId && periodo && (
+          <>
+            <a
+              className="secundario"
+              style={{ alignSelf: "flex-end" }}
+              href={api.turnos.urlPlantilla(periodo.id, unidadId)}
+              title="Descarga el cuadro de turnos en Excel, con los turnos que ya están registrados"
+            >
+              Descargar plantilla
+            </a>
+            {!soloLectura && (
+              <button
+                type="button"
+                className="secundario"
+                style={{ alignSelf: "flex-end" }}
+                onClick={() => setImportando(true)}
+              >
+                Importar turnos
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -304,6 +328,14 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
           </div>
           {empleados.length === 0 && (
             <p className="pista">La unidad no tiene empleados: créelos en «Unidades y empleados».</p>
+          )}
+          {importando && (
+            <ImportarTurnos
+              unidad={unidades.find((u) => u.id === unidadId)!}
+              periodo={periodo}
+              alCerrar={() => setImportando(false)}
+              alImportado={recargarTurnos}
+            />
           )}
           {empleadoPrevia && (
             <PreviaTurnosEmpleado

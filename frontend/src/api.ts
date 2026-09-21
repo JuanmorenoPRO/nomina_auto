@@ -9,6 +9,7 @@ import type {
   Parametro,
   Periodo,
   RegistroAuditoria,
+  ReporteImportacion,
   Rol,
   Turno,
   Unidad,
@@ -21,8 +22,11 @@ const BASE = "/api";
 export const EVENTO_NO_AUTENTICADO = "nomina:no-autenticado";
 
 async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
+  // Con FormData el Content-Type lo pone el navegador, porque lleva el boundary
+  // del multipart; fijarlo a mano rompe el upload.
+  const esFormData = init?.body instanceof FormData;
   const respuesta = await fetch(BASE + ruta, {
-    headers: { "Content-Type": "application/json" },
+    headers: esFormData ? undefined : { "Content-Type": "application/json" },
     ...init,
   });
   if (respuesta.status === 401 && !ruta.startsWith("/auth/")) {
@@ -157,6 +161,22 @@ export const api = {
         method: "PATCH",
         body: json({ minutos_jornada_ordinaria: minutos }),
       }),
+    /** Plantilla de turnos en Excel, ya llena con lo que hay en la base (con
+     *  `empleadoId`, solo la hoja de ese empleado). Es un enlace directo: la
+     *  descarga la fuerza el backend, igual que el Excel de liquidación. */
+    urlPlantilla: (periodoId: string, unidadId: string, empleadoId?: string) =>
+      `${BASE}/periodos/${periodoId}/turnos/plantilla?unidad_id=${unidadId}` +
+      (empleadoId ? `&empleado_id=${empleadoId}` : ""),
+    /** Sube la plantilla. Con `validarSolo` previsualiza sin escribir nada. */
+    importar: (periodoId: string, unidadId: string, archivo: File, validarSolo: boolean) => {
+      const cuerpo = new FormData();
+      cuerpo.append("archivo", archivo);
+      return pedir<ReporteImportacion>(
+        `/periodos/${periodoId}/turnos/importar` +
+          `?unidad_id=${unidadId}&validar_solo=${validarSolo}`,
+        { method: "POST", body: cuerpo },
+      );
+    },
   },
   ajustesQuincena: {
     obtener: (empleadoId: string, periodoId: string) =>
