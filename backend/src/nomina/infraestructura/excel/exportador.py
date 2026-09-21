@@ -4,12 +4,11 @@ En la segunda quincena se agrega una hoja de APROPIACIONES."""
 
 from __future__ import annotations
 
-import re
 from decimal import Decimal
 from io import BytesIO
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -17,11 +16,13 @@ from nomina.aplicacion.casos_uso.liquidar_quincena import (
     LiquidacionEmpleado,
     LiquidacionQuincena,
 )
-
-_NEGRITA = Font(bold=True)
-_TITULO = Font(bold=True, size=13)
-_PESOS = "#,##0"
-_BORDE_FINO = Border(bottom=Side(style="thin"))
+from nomina.infraestructura.excel.estilos import (
+    BORDE_FINO as _BORDE_FINO,
+    NEGRITA as _NEGRITA,
+    PESOS as _PESOS,
+    TITULO as _TITULO,
+    titulo_hoja as _titulo_hoja,
+)
 
 _COLUMNAS_APROP = [
     ("EMPLEADO", None),
@@ -41,11 +42,6 @@ _COLUMNAS_APROP = [
 
 # Columnas que usan base CON AUXILIO (prima, cesantías); el resto usa SIN AUXILIO.
 _BASE_CON_AUXILIO = {"aprop_prima", "aprop_cesantias"}
-
-
-def _titulo_hoja(nombre: str) -> str:
-    """Excel limita títulos a 31 caracteres y prohíbe []:*?/\\"""
-    return re.sub(r"[\[\]:*?/\\]", "", nombre).strip()[:31] or "EMPLEADO"
 
 
 def _encabezado(hoja: Worksheet, liq: LiquidacionQuincena) -> None:

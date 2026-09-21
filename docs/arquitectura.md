@@ -49,8 +49,9 @@ migraciones Alembic desde la Fase 2.
 │ sesiones + auditoría (seguridad/)                  │
 ├────────────────────────────────────────────────────┤
 │ aplicación: casos de uso — RegistrarTurno,         │
-│ LiquidarQuincena, ActualizarParametro,             │
-│ ExportarLiquidacion, CerrarQuincena                │
+│ ImportarTurnos, LiquidarQuincena,                  │
+│ ActualizarParametro, ExportarLiquidacion,          │
+│ CerrarQuincena                                     │
 ├────────────────────────────────────────────────────┤
 │ dominio (PURO, solo stdlib): entidades, valores,   │
 │ servicios (segmentador, clasificador, calculadora, │
@@ -65,6 +66,13 @@ Reglas de dependencia (verificadas por `import-linter`):
 - `aplicacion` solo importa `dominio`. Orquesta: carga datos por los puertos, invoca el
   motor, persiste resultados.
 - `infraestructura` implementa los puertos (`Protocol`s definidos en `dominio/puertos/`).
+
+El módulo `infraestructura/excel/` es el único que conoce openpyxl, en las dos direcciones:
+`exportador.py` (liquidación), `plantilla_turnos.py` (el cuadro de turnos como plantilla,
+una hoja por empleado) e `importador.py` (la lee de vuelta). El importador solo traduce el
+archivo a datos puros —`LibroTurnos`, definido en `aplicacion/casos_uso/importar_turnos.py`
+junto al `Protocol LectorTurnosExcel`—; las reglas (reemplazo por empleado, empleado
+desconocido, todo o nada) están en el caso de uso, igual que `ExportadorLiquidacion`.
 
 ### Estructura de carpetas
 

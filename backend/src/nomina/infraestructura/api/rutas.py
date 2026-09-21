@@ -15,13 +15,17 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from nomina.aplicacion.casos_uso.actualizar_parametro import ActualizarParametro
 from nomina.aplicacion.casos_uso.cerrar_quincena import CerrarQuincena
 from nomina.aplicacion.casos_uso.exportar_liquidacion import ExportarLiquidacion
+from nomina.aplicacion.casos_uso.importar_turnos import (
+    ImportarTurnos,
+    ReporteImportacion,
+)
 from nomina.aplicacion.casos_uso.liquidar_quincena import LiquidarQuincena
 from nomina.aplicacion.casos_uso.marcar_periodo_liquidado import MarcarPeriodoLiquidado
 from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
@@ -39,6 +43,14 @@ from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, Uni
 from nomina.dominio.servicios.calendario_festivos import festivos_por_ley
 from nomina.infraestructura.api import schemas, traductores
 from nomina.infraestructura.excel.exportador import exportar_liquidacion_excel
+from nomina.infraestructura.excel.importador import (
+    TAMANO_MAXIMO as TAMANO_MAXIMO_PLANTILLA,
+)
+from nomina.infraestructura.excel.importador import leer_plantilla_turnos
+from nomina.infraestructura.excel.plantilla_turnos import (
+    generar_plantilla_turnos,
+    nombre_archivo_plantilla,
+)
 from nomina.infraestructura.persistencia.base import sesion
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
@@ -488,6 +500,156 @@ def eliminar_turno(turno_id: UUID, usuario: UsuarioOperador, session: Sesion):
             antes={"empleado_id": str(turno.empleado_id), "fecha": turno.turno.fecha.isoformat(),
                    "hora_inicio": str(turno.turno.hora_inicio),
                    "hora_fin": str(turno.turno.hora_fin)})
+
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _festivos_del_periodo(session: Session, periodo: PeriodoLiquidacion) -> frozenset[date]:
+    agregados, anulados = RepositorioFestivosSQL(session).ajustes()
+    del_calendario = {
+        f
+        for anio in {periodo.fecha_inicio.year, periodo.fecha_fin.year}
+        for f in festivos_por_ley(anio)
+        if f not in anulados
+    }
+    return frozenset(del_calendario | set(agregados))
+
+
+@router.get("/periodos/{periodo_id}/turnos/plantilla")
+def descargar_plantilla_turnos(
+    periodo_id: UUID,
+    unidad_id: UUID,
+    usuario: UsuarioOperador,
+    session: Sesion,
+    empleado_id: UUID | None = None,
+) -> Response:
+    """Plantilla de turnos en Excel (una hoja por empleado, una fila por día),
+    ya llena con los turnos que hay en la base: sirve de respaldo del cuadro de
+    turnos y es el archivo que se vuelve a subir para importar.
+
+    Solo empleados activos, que son los únicos que la importación acepta. Con
+    `empleado_id` se descarga la hoja de un solo empleado (desde su tarjeta).
+    """
+    periodo = RepositorioPeriodosSQL(session).obtener(periodo_id)
+    if periodo is None:
+        raise HTTPException(404, "No existe el periodo")
+    unidad = RepositorioUnidadesSQL(session).obtener(unidad_id)
+    if unidad is None:
+        raise HTTPException(404, "No existe la unidad")
+
+    empleados = RepositorioEmpleadosSQL(session).listar(unidad_id=unidad_id, solo_activos=True)
+    uno: Empleado | None = None
+    if empleado_id is not None:
+        empleados = [e for e in empleados if e.id == empleado_id]
+        if not empleados:
+            raise HTTPException(404, "No hay un empleado activo con ese id en la unidad")
+        uno = empleados[0]
+
+    turnos_repo = RepositorioTurnosSQL(session)
+    ajustes = RepositorioAjustesQuincenaSQL(session)
+    turnos = {
+        e.id: turnos_repo.de_empleado_entre(e.id, periodo.fecha_inicio, periodo.fecha_fin)
+        for e in empleados
+    }
+    marcas = {
+        e.id: {
+            "quincena_incompleta": ajustes.quincena_incompleta(e.id, periodo_id),
+            "sin_extras": ajustes.sin_extras(e.id, periodo_id),
+            "auxilio_por_dias_laborados": ajustes.auxilio_por_dias_laborados(e.id, periodo_id),
+            "pagar_dia_31": ajustes.pagar_dia_31(e.id, periodo_id),
+        }
+        for e in empleados
+    }
+
+    contenido = generar_plantilla_turnos(
+        unidad, periodo, empleados, turnos, _festivos_del_periodo(session, periodo), marcas
+    )
+    nombre = nombre_archivo_plantilla(unidad, periodo, uno)
+    auditar(session, usuario.email, "exportar", "plantilla_turnos", f"{unidad_id}:{periodo_id}")
+    return Response(
+        content=contenido,
+        media_type=XLSX,
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
+
+
+def _reporte_a_schema(reporte: ReporteImportacion) -> schemas.ReporteImportacionRespuesta:
+    return schemas.ReporteImportacionRespuesta(
+        aplicado=reporte.aplicado,
+        hojas=[
+            schemas.HojaImportadaRespuesta(
+                hoja=h.hoja,
+                documento=h.documento,
+                empleado=h.empleado,
+                turnos_creados=h.turnos_creados,
+                turnos_borrados=h.turnos_borrados,
+                horas=f"{h.horas:.2f}",
+                marcas=h.marcas,
+            )
+            for h in reporte.hojas
+        ],
+        ignoradas=list(reporte.ignoradas),
+        errores=[
+            schemas.ErrorImportacionRespuesta(hoja=e.hoja, fila=e.fila, mensaje=e.mensaje)
+            for e in reporte.errores
+        ],
+    )
+
+
+@router.post(
+    "/periodos/{periodo_id}/turnos/importar",
+    response_model=schemas.ReporteImportacionRespuesta,
+)
+async def importar_turnos_del_periodo(
+    periodo_id: UUID,
+    unidad_id: UUID,
+    usuario: UsuarioOperador,
+    session: Sesion,
+    archivo: Annotated[UploadFile, File(description="Plantilla de turnos (.xlsx)")],
+    validar_solo: bool = False,
+) -> schemas.ReporteImportacionRespuesta:
+    """Carga la quincena completa de una unidad desde la plantilla de Excel.
+
+    Es todo o nada: si alguna hoja tiene un error no se guarda nada y el reporte
+    dice qué corregir (`aplicado=false`). Con `validar_solo=true` se previsualiza
+    sin escribir. Los turnos del periodo de cada empleado que venga en el archivo
+    se REEMPLAZAN por los de su hoja; los empleados ausentes no se tocan.
+    """
+    if archivo.filename and not archivo.filename.lower().endswith(".xlsx"):
+        raise HTTPException(
+            400,
+            "El archivo debe ser un Excel .xlsx. Si es un .xls antiguo, ábralo en "
+            "Excel y guárdelo como .xlsx.",
+        )
+    # Leer con tope: así un archivo enorme no se carga entero en memoria antes
+    # de que el lector lo rechace (se pide un byte más para detectar el exceso).
+    contenido = await archivo.read(TAMANO_MAXIMO_PLANTILLA + 1)
+
+    caso = ImportarTurnos(
+        empleados=RepositorioEmpleadosSQL(session),
+        periodos=RepositorioPeriodosSQL(session),
+        turnos=RepositorioTurnosSQL(session),
+        marcas=RepositorioAjustesQuincenaSQL(session),
+        lector=leer_plantilla_turnos,
+    )
+    reporte = caso.ejecutar(unidad_id, periodo_id, contenido, aplicar=not validar_solo)
+
+    if reporte.aplicado:
+        for hoja in reporte.hojas:
+            auditar(
+                session, usuario.email, "importar", "turno", f"{unidad_id}:{periodo_id}",
+                antes={"turnos_borrados": hoja.turnos_borrados},
+                despues={
+                    "empleado": hoja.empleado,
+                    "documento": hoja.documento,
+                    "turnos_creados": hoja.turnos_creados,
+                    "horas": f"{hoja.horas:.2f}",
+                    "marcas": hoja.marcas,
+                    "archivo": archivo.filename or "",
+                },
+            )
+    return _reporte_a_schema(reporte)
 
 
 # --- Parámetros legales (RF5) — solo admin ---

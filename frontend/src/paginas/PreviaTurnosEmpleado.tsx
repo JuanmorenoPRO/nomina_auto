@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import { ImportarTurnos } from "./ImportarTurnos";
 import type { Empleado, Periodo, Turno, Unidad } from "../tipos";
 import {
   DIAS_SEMANA,
@@ -135,6 +136,7 @@ export function PreviaTurnosEmpleado({
   const [pagarDia31, setPagarDia31] = useState(false);
   const [guardandoDia31, setGuardandoDia31] = useState(false);
   const [guardandoEstado, setGuardandoEstado] = useState<CampoEstado | null>(null);
+  const [importando, setImportando] = useState(false);
 
   useEffect(() => {
     api.ajustesQuincena
@@ -353,6 +355,14 @@ export function PreviaTurnosEmpleado({
   );
 
 
+  /** Tras importar, el borrador local de esta tarjeta quedó viejo: si no se
+   *  vuelve a leer del servidor, «Guardar cambios» desharía la importación. */
+  async function releerTrasImportar() {
+    const todos = await api.periodos.turnos(periodo.id, unidad.id);
+    setPares(paresIniciales(dias, todos.filter((t) => t.empleado_id === empleado.id)));
+    alGuardado();
+  }
+
   async function guardar() {
     setError("");
     // Normalizar y validar todos los pares con contenido.
@@ -461,6 +471,21 @@ export function PreviaTurnosEmpleado({
               {etiqueta}
             </label>
           ))}
+        </div>
+
+        <div className="fila" style={{ marginBottom: 12 }}>
+          <a
+            className="secundario"
+            href={api.turnos.urlPlantilla(periodo.id, unidad.id, empleado.id)}
+            title="Descarga esta tarjeta en Excel, con los turnos que ya están registrados"
+          >
+            Descargar hoja
+          </a>
+          {!soloLectura && (
+            <button type="button" className="secundario" onClick={() => setImportando(true)}>
+              Importar hoja
+            </button>
+          )}
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -666,6 +691,16 @@ export function PreviaTurnosEmpleado({
             </p>
           )}
         </div>
+        {importando && (
+          <ImportarTurnos
+            unidad={unidad}
+            periodo={periodo}
+            empleado={empleado}
+            alCerrar={() => setImportando(false)}
+            alImportado={releerTrasImportar}
+          />
+        )}
+
         <div className="fila" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="secundario" onClick={alCerrar}>
             {soloLectura ? "Cerrar" : "Cancelar"}

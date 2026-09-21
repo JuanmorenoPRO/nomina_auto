@@ -193,6 +193,32 @@ class TurnoRespuesta(BaseModel):
     minutos_jornada_ordinaria: int | None = None
 
 
+class ErrorImportacionRespuesta(BaseModel):
+    hoja: str
+    fila: int | None = None
+    mensaje: str
+
+
+class HojaImportadaRespuesta(BaseModel):
+    hoja: str
+    documento: str
+    empleado: str
+    turnos_creados: int
+    turnos_borrados: int
+    horas: str
+    marcas: dict[str, bool]
+
+
+class ReporteImportacionRespuesta(BaseModel):
+    """Resultado de importar la plantilla de turnos. `aplicado=False` con
+    `errores` es la previsualización o el rechazo: no se guardó nada."""
+
+    aplicado: bool
+    hojas: list[HojaImportadaRespuesta]
+    ignoradas: list[str]
+    errores: list[ErrorImportacionRespuesta]
+
+
 class ParametroCrear(BaseModel):
     codigo: str = Field(max_length=50)
     valor: str = Field(min_length=1, max_length=50)

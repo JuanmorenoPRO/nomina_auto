@@ -231,6 +231,60 @@ Si la quincena ya está liquidada o cerrada, la grilla se muestra sin campos de 
 aparece el aviso *«El periodo está cerrado: para corregir turnos, reábralo en “Unidades y
 empleados”.»* Un periodo **cerrado no se puede reabrir**.
 
+### Importar los turnos desde Excel
+
+Cuando la quincena ya está digitada en una hoja de cálculo, no hace falta volver a
+escribirla celda por celda. Junto a los selectores hay dos botones:
+
+- **«Descargar plantilla»** baja un archivo `.xlsx` con **una hoja por empleado**, en el
+  mismo formato de la tarjeta de turnos (§6): `DÍA · N.º · ENTRA · SALE · JORN. ORD. (h) ·
+  TOTAL H`, una fila por día, con los domingos y festivos en rosado. La plantilla viene
+  **ya llena con los turnos que hay registrados**, así que también sirve de respaldo de la
+  quincena. (En la tarjeta de un empleado el mismo botón se llama «Descargar hoja» y baja
+  solo la de él.)
+- **«Importar turnos»** sube ese archivo de vuelta.
+
+#### Cómo se llena
+
+| Columna | Qué escribir |
+|---|---|
+| **N.º** | El día del mes. Es lo único con lo que el sistema ubica la fila |
+| **ENTRA** / **SALE** | El horario: `06:00`, `6`, `18:30` o `6,5` |
+| **JORN. ORD. (h)** | Solo en los turnos de *jornada ordinaria* (§6): las horas que cubre el salario |
+
+- Si la salida es **menor o igual** que la entrada, el turno **cruza la medianoche**
+  (`18:00` a `06:00` son 12 horas).
+- **Día sin horario = descanso.** No hay que escribir nada.
+- **Turno partido:** agregue otra fila con el mismo número de día.
+- Las filas **SÍ/NO** del encabezado son las marcas de la quincena (quincena incompleta,
+  sin extras, auxilio prorrateado, día 31). Si borra la fila entera, la marca que haya en
+  el sistema **no se modifica**.
+- Las columnas **DÍA** y **TOTAL H** son informativas: se recalculan al importar.
+- Puede agregar o quitar filas: el encabezado de la tabla se reconoce por los títulos
+  **ENTRA** y **SALE**, no por su posición.
+
+#### Qué pasa al importar
+
+Al elegir el archivo, la aplicación lo **revisa sin guardar nada** y muestra una tabla con
+lo que haría: cuántos turnos crea, cuántos reemplaza, cuántas horas quedan y qué marcas
+aplica. Solo al pulsar **«Importar»** se guarda.
+
+> **Importante:** los turnos de la quincena de **cada empleado que aparezca en el archivo**
+> se **reemplazan** por los de su hoja. Los empleados que no estén en el archivo no se
+> tocan, y una hoja sin horarios deja a ese empleado sin turnos en la quincena.
+
+Dos reglas que conviene tener claras:
+
+- El empleado se identifica por la **C.C. del encabezado**, no por el nombre de la hoja
+  (Excel lo recorta a 31 caracteres). No borre esa fila.
+- La importación **no crea empleados**. Si una cédula no existe en la unidad, el archivo se
+  rechaza **completo** y no se guarda nada: primero cree al empleado en *Unidades y
+  empleados*.
+
+Si algo está mal —una hora ilegible, un día que no pertenece a la quincena, dos turnos que
+se solapan— **no se guarda nada** y la aplicación lista cada problema con su hoja y su
+fila. Se corrige el archivo y se vuelve a subir.
+
 ---
 
 ## 6. Previsualización de turnos (formato tarjeta)
@@ -390,6 +444,17 @@ Y así queda su liquidación: tiempo ordinario sobre 48 horas en vez de 105, y a
 transporte prorrateado.
 
 ![Desglose de una quincena incompleta](imagenes/17-desglose-quincena-incompleta.png)
+
+### Descargar e importar la hoja de este empleado
+
+Bajo los estados del empleado están **«Descargar hoja»** e **«Importar hoja»**: hacen lo
+mismo que los botones del cuadro de turnos (§5, *Importar los turnos desde Excel*), pero
+acotados a este empleado. La descarga trae un Excel con su tarjeta; la importación acepta
+el mismo archivo.
+
+Al terminar una importación, la tarjeta vuelve a leer los turnos del servidor, así que lo
+que aparece en pantalla es lo que quedó guardado —no hay que pulsar «Guardar cambios»
+después—.
 
 ### En solo lectura
 
@@ -561,6 +626,19 @@ Los ajustes se guardan al instante, pero la liquidación no se recalcula sola: h
 En la tarjeta los horarios solo se aplican con **«Guardar cambios»**. Si cerró con
 «Cancelar» o haciendo clic afuera, el borrador se descarta.
 
+**Al importar dice que no hay ningún empleado con esa C.C.**
+La cédula del encabezado de esa hoja no existe en la unidad seleccionada. La importación no
+crea empleados: créelo en *Unidades y empleados* (o revise que la cédula esté bien escrita
+y que sea la unidad correcta) y vuelva a subir el archivo.
+
+**Importé y perdí turnos de un empleado.**
+La importación reemplaza la quincena completa de cada empleado que venga en el archivo: si
+su hoja estaba vacía, quedó sin turnos. Vuelva a subir el archivo con los horarios
+completos.
+
+**No me deja subir el archivo: dice que debe ser .xlsx.**
+Es un `.xls` antiguo. Ábralo en Excel y use *Guardar como* → *Libro de Excel (.xlsx)*.
+
 **Las horas de la quincena no me cuadran con la planilla.**
 Revise en *Configuración* → *Parámetros legales* que no aparezca el aviso rojo
 «Parámetros descuadrados», y que la fecha de la quincena caiga en la vigencia que espera.
@@ -583,6 +661,7 @@ Revise en *Configuración* → *Parámetros legales* que no aparezca el aviso ro
 | **Turno de relleno** | Turno de jornada ordinaria creado por el sistema en un día vacío (06:00–13:00) |
 | **Quincena incompleta** *(marca)* | El tiempo ordinario se paga sobre lo trabajado, no sobre el presupuesto |
 | **Auxilio prorrateado** *(marca)* | El auxilio de transporte se paga en proporción a las horas trabajadas |
+| **Plantilla de turnos** | Excel con una hoja por empleado que se descarga, se llena y se vuelve a subir |
 | **Devengado** | Lo que se le paga al empleado |
 | **Deducción** | Lo que se le descuenta |
 | **IBC** | Ingreso base de cotización: la base sobre la que se calculan los aportes |

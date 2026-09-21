@@ -94,6 +94,33 @@ export interface Turno {
   minutos_jornada_ordinaria: number | null;
 }
 
+/** Una fila del reporte de importación de turnos: qué haría (o hizo) la hoja
+ *  de un empleado. */
+export interface HojaImportada {
+  hoja: string;
+  documento: string;
+  empleado: string;
+  turnos_creados: number;
+  turnos_borrados: number;
+  horas: string;
+  marcas: Record<string, boolean>;
+}
+
+export interface ErrorImportacion {
+  hoja: string;
+  fila: number | null;
+  mensaje: string;
+}
+
+/** Resultado de importar la plantilla de turnos. `aplicado: false` es la
+ *  previsualización o el rechazo: no se guardó nada. */
+export interface ReporteImportacion {
+  aplicado: boolean;
+  hojas: HojaImportada[];
+  ignoradas: string[];
+  errores: ErrorImportacion[];
+}
+
 export interface Parametro {
   codigo: string;
   valor: string;
