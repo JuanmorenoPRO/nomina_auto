@@ -384,10 +384,12 @@ def obtener_ajuste_quincena(
 ):
     """Marcas del empleado en esta quincena (desde el cuadro de turnos):
     `quincena_incompleta` (liquidar sobre lo trabajado), `sin_extras` (no cobrar
-    extra por turno; solo sobre el excedente del presupuesto quincenal) y
+    extra por turno; solo sobre el excedente del presupuesto quincenal),
     `auxilio_por_dias_laborados` (prorratear el auxilio de transporte sobre los
-    días con turno en vez de pagar el quincenal plano) y `pagar_dia_31` (reconocer
-    aparte las horas del día 31, que el presupuesto de 15 días no cubre)."""
+    días con turno en vez de pagar el quincenal plano), `pagar_dia_31` (reconocer
+    aparte las horas del día 31, que el presupuesto de 15 días no cubre),
+    `no_devengar_auxilio` y `no_descontar_seguridad_social` (excepciones contables
+    puntuales: no pagar el auxilio o no descontar salud/pensión esa quincena)."""
     repo = RepositorioAjustesQuincenaSQL(session)
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id,
@@ -396,6 +398,10 @@ def obtener_ajuste_quincena(
         sin_extras=repo.sin_extras(empleado_id, periodo_id),
         auxilio_por_dias_laborados=repo.auxilio_por_dias_laborados(empleado_id, periodo_id),
         pagar_dia_31=repo.pagar_dia_31(empleado_id, periodo_id),
+        no_devengar_auxilio=repo.no_devengar_auxilio(empleado_id, periodo_id),
+        no_descontar_seguridad_social=repo.no_descontar_seguridad_social(
+            empleado_id, periodo_id
+        ),
     )
 
 
@@ -419,18 +425,25 @@ def marcar_ajuste_quincena(
         sin_extras=datos.sin_extras,
         auxilio_por_dias_laborados=datos.auxilio_por_dias_laborados,
         pagar_dia_31=datos.pagar_dia_31,
+        no_devengar_auxilio=datos.no_devengar_auxilio,
+        no_descontar_seguridad_social=datos.no_descontar_seguridad_social,
     )
     incompleta = repo.quincena_incompleta(empleado_id, periodo_id)
     sin_extras = repo.sin_extras(empleado_id, periodo_id)
     auxilio_por_dias = repo.auxilio_por_dias_laborados(empleado_id, periodo_id)
     dia_31 = repo.pagar_dia_31(empleado_id, periodo_id)
+    no_auxilio = repo.no_devengar_auxilio(empleado_id, periodo_id)
+    no_seg_social = repo.no_descontar_seguridad_social(empleado_id, periodo_id)
     auditar(session, usuario.email, "actualizar", "ajuste_quincena", f"{empleado_id}:{periodo_id}",
             despues={"quincena_incompleta": incompleta, "sin_extras": sin_extras,
-                     "auxilio_por_dias_laborados": auxilio_por_dias, "pagar_dia_31": dia_31})
+                     "auxilio_por_dias_laborados": auxilio_por_dias, "pagar_dia_31": dia_31,
+                     "no_devengar_auxilio": no_auxilio,
+                     "no_descontar_seguridad_social": no_seg_social})
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id, periodo_id=periodo_id,
         quincena_incompleta=incompleta, sin_extras=sin_extras,
         auxilio_por_dias_laborados=auxilio_por_dias, pagar_dia_31=dia_31,
+        no_devengar_auxilio=no_auxilio, no_descontar_seguridad_social=no_seg_social,
     )
 
 

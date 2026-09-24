@@ -191,6 +191,8 @@ export const api = {
         sin_extras: boolean;
         auxilio_por_dias_laborados: boolean;
         pagar_dia_31: boolean;
+        no_devengar_auxilio: boolean;
+        no_descontar_seguridad_social: boolean;
       }>,
     ) =>
       pedir<AjusteQuincena>(

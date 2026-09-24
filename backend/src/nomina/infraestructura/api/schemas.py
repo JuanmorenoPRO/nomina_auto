@@ -122,6 +122,8 @@ class AjusteQuincenaActualizar(BaseModel):
     sin_extras: bool | None = None
     auxilio_por_dias_laborados: bool | None = None
     pagar_dia_31: bool | None = None
+    no_devengar_auxilio: bool | None = None
+    no_descontar_seguridad_social: bool | None = None
 
 
 class AjusteQuincenaRespuesta(BaseModel):
@@ -131,6 +133,8 @@ class AjusteQuincenaRespuesta(BaseModel):
     sin_extras: bool
     auxilio_por_dias_laborados: bool
     pagar_dia_31: bool
+    no_devengar_auxilio: bool
+    no_descontar_seguridad_social: bool
 
 
 class PeriodoCrear(BaseModel):

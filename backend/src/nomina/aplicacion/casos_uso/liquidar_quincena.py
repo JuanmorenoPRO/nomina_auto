@@ -90,12 +90,19 @@ class RepositorioAjustesQuincena(Protocol):
     - `auxilio_por_dias_laborados`: prorratear el auxilio de transporte en
       proporción a lo laborado en vez de pagar el quincenal plano.
     - `pagar_dia_31`: reconocer aparte las horas no-extra del día 31, que el
-      presupuesto de 15 días de la quincena no cubre."""
+      presupuesto de 15 días de la quincena no cubre.
+    - `no_devengar_auxilio`: excepción contable puntual — no pagar auxilio de
+      transporte esa quincena, sin importar `incapacitado`/`ocasional` ni
+      `auxilio_por_dias_laborados`.
+    - `no_descontar_seguridad_social`: excepción contable puntual — no descontar
+      salud ni pensión esa quincena, aunque la unidad las tenga activadas."""
 
     def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def sin_extras(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def auxilio_por_dias_laborados(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def pagar_dia_31(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
+    def no_devengar_auxilio(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
+    def no_descontar_seguridad_social(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -163,6 +170,11 @@ class LiquidarQuincena:
             # El día 31 queda fuera del presupuesto (la quincena se paga como 15 días);
             # el dominio decide qué horas de ese día reconocer.
             dia_31 = self.ajustes_quincena.pagar_dia_31(empleado.id, periodo_id)
+            # Excepciones contables puntuales: ganan sobre cualquier otra regla.
+            no_auxilio = self.ajustes_quincena.no_devengar_auxilio(empleado.id, periodo_id)
+            no_seg_social = self.ajustes_quincena.no_descontar_seguridad_social(
+                empleado.id, periodo_id
+            )
             resultado = liquidar(
                 clasificados,
                 empleado.salario_base,
@@ -170,13 +182,14 @@ class LiquidarQuincena:
                 periodo.fecha_inicio,
                 # La marca manual manda: prorratear paga el auxilio aunque el empleado
                 # esté incapacitado u ocasional (se incapacitó a mitad de quincena, pero
-                # alcanzó a trabajar unos días y esos sí generan auxilio).
-                incluir_auxilio_transporte=por_dias
-                or not (empleado.incapacitado or empleado.ocasional),
+                # alcanzó a trabajar unos días y esos sí generan auxilio). Pero
+                # `no_devengar_auxilio` es la excepción contable y gana sobre todo lo demás.
+                incluir_auxilio_transporte=not no_auxilio
+                and (por_dias or not (empleado.incapacitado or empleado.ocasional)),
                 auxilio_prorrateado=por_dias,
                 factores_override=unidad.config.factores_override,
                 conceptos_manuales=manuales,
-                descontar_seguridad_social=unidad.descuenta_seguridad_social,
+                descontar_seguridad_social=unidad.descuenta_seguridad_social and not no_seg_social,
                 quincena_completa=not incompleta,
                 pagar_dia_31=dia_31,
             )

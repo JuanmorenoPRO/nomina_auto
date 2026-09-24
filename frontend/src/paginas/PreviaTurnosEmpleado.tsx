@@ -78,6 +78,15 @@ const TITULO_PAGAR_DIA_31 =
   "extra) se reconocen aparte a hora base, en la línea DIA 31. Los recargos y las " +
   "extras del 31 ya se pagan en sus propias líneas.";
 
+const TITULO_NO_DEVENGAR_AUXILIO =
+  "Excepción contable puntual: no se paga auxilio de transporte en esta quincena, " +
+  "sin importar el estado del empleado (incapacitado/ocasional) ni si el auxilio " +
+  "se prorratea por lo laborado.";
+
+const TITULO_NO_DESCONTAR_SEGURIDAD_SOCIAL =
+  "Excepción contable puntual: no se descuentan salud ni pensión en esta " +
+  "quincena, aunque la unidad tenga activado el descuento de seguridad social.";
+
 const TITULO_JORNADA_ORDINARIA =
   "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
   "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
@@ -135,6 +144,10 @@ export function PreviaTurnosEmpleado({
   const [guardandoAuxilio, setGuardandoAuxilio] = useState(false);
   const [pagarDia31, setPagarDia31] = useState(false);
   const [guardandoDia31, setGuardandoDia31] = useState(false);
+  const [noDevengarAuxilio, setNoDevengarAuxilio] = useState(false);
+  const [guardandoNoAuxilio, setGuardandoNoAuxilio] = useState(false);
+  const [noDescontarSeguridadSocial, setNoDescontarSeguridadSocial] = useState(false);
+  const [guardandoNoSeguridadSocial, setGuardandoNoSeguridadSocial] = useState(false);
   const [guardandoEstado, setGuardandoEstado] = useState<CampoEstado | null>(null);
   const [importando, setImportando] = useState(false);
 
@@ -146,6 +159,8 @@ export function PreviaTurnosEmpleado({
         setSinExtras(a.sin_extras);
         setAuxilioPorDias(a.auxilio_por_dias_laborados);
         setPagarDia31(a.pagar_dia_31);
+        setNoDevengarAuxilio(a.no_devengar_auxilio);
+        setNoDescontarSeguridadSocial(a.no_descontar_seguridad_social);
       })
       .catch((e) => setError(e.message));
   }, [empleado.id, periodo.id]);
@@ -215,6 +230,34 @@ export function PreviaTurnosEmpleado({
       setError((err as Error).message);
     } finally {
       setGuardandoDia31(false);
+    }
+  }
+
+  async function marcarNoDevengarAuxilio(valor: boolean) {
+    setError("");
+    setGuardandoNoAuxilio(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, { no_devengar_auxilio: valor });
+      setNoDevengarAuxilio(valor);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoNoAuxilio(false);
+    }
+  }
+
+  async function marcarNoDescontarSeguridadSocial(valor: boolean) {
+    setError("");
+    setGuardandoNoSeguridadSocial(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, {
+        no_descontar_seguridad_social: valor,
+      });
+      setNoDescontarSeguridadSocial(valor);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoNoSeguridadSocial(false);
     }
   }
 
@@ -690,6 +733,31 @@ export function PreviaTurnosEmpleado({
               extras&rdquo;.
             </p>
           )}
+          <label className="casilla" title={TITULO_NO_DEVENGAR_AUXILIO}>
+            <input
+              type="checkbox"
+              checked={noDevengarAuxilio}
+              disabled={soloLectura || guardandoNoAuxilio}
+              onChange={(e) => marcarNoDevengarAuxilio(e.target.checked)}
+            />
+            No devengar auxilio de transporte esta quincena (excepción contable)
+          </label>
+          {auxilioPorDias && noDevengarAuxilio && (
+            <p className="aviso-advertencia" style={{ margin: 0 }}>
+              ⚠ &ldquo;No devengar auxilio&rdquo; gana sobre &ldquo;Calcular el auxilio
+              con lo laborado&rdquo;: no se paga auxilio así esté prorrateado.
+            </p>
+          )}
+          <label className="casilla" title={TITULO_NO_DESCONTAR_SEGURIDAD_SOCIAL}>
+            <input
+              type="checkbox"
+              checked={noDescontarSeguridadSocial}
+              disabled={soloLectura || guardandoNoSeguridadSocial}
+              onChange={(e) => marcarNoDescontarSeguridadSocial(e.target.checked)}
+            />
+            No descontar seguridad social (salud y pensión) esta quincena (excepción
+            contable)
+          </label>
         </div>
         {importando && (
           <ImportarTurnos
