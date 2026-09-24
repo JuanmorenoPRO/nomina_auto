@@ -437,6 +437,14 @@ class RepositorioAjustesQuincenaSQL:
         m = self._obtener(empleado_id, periodo_id)
         return m.pagar_dia_31 if m else False
 
+    def no_devengar_auxilio(self, empleado_id: UUID, periodo_id: UUID) -> bool:
+        m = self._obtener(empleado_id, periodo_id)
+        return m.no_devengar_auxilio if m else False
+
+    def no_descontar_seguridad_social(self, empleado_id: UUID, periodo_id: UUID) -> bool:
+        m = self._obtener(empleado_id, periodo_id)
+        return m.no_descontar_seguridad_social if m else False
+
     def marcar(
         self,
         empleado_id: UUID,
@@ -446,6 +454,8 @@ class RepositorioAjustesQuincenaSQL:
         sin_extras: bool | None = None,
         auxilio_por_dias_laborados: bool | None = None,
         pagar_dia_31: bool | None = None,
+        no_devengar_auxilio: bool | None = None,
+        no_descontar_seguridad_social: bool | None = None,
     ) -> None:
         """Actualiza los flags dados; `None` deja el flag como estaba (una fila
         nueva arranca con todos en `False`)."""
@@ -463,6 +473,10 @@ class RepositorioAjustesQuincenaSQL:
             m.auxilio_por_dias_laborados = auxilio_por_dias_laborados
         if pagar_dia_31 is not None:
             m.pagar_dia_31 = pagar_dia_31
+        if no_devengar_auxilio is not None:
+            m.no_devengar_auxilio = no_devengar_auxilio
+        if no_descontar_seguridad_social is not None:
+            m.no_descontar_seguridad_social = no_descontar_seguridad_social
         self.session.flush()
 
 

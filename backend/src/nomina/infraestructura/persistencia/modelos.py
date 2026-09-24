@@ -238,6 +238,12 @@ class AjusteQuincenaModel(Base):
       esos estados normalmente lo quiten por completo.
     - `pagar_dia_31`: la quincena se paga siempre como 15 días; en los meses de 31
       días, marcado, las horas no-extra del 31 se reconocen aparte a hora base.
+    - `no_devengar_auxilio`: excepción contable puntual — no se paga auxilio de
+      transporte esa quincena, sin importar `incapacitado`/`ocasional` ni
+      `auxilio_por_dias_laborados`.
+    - `no_descontar_seguridad_social`: excepción contable puntual — no se descuentan
+      salud ni pensión esa quincena, aunque la unidad tenga
+      `descuenta_seguridad_social=True`.
     """
 
     __tablename__ = "ajuste_quincena"
@@ -250,3 +256,5 @@ class AjusteQuincenaModel(Base):
     sin_extras: Mapped[bool] = mapped_column(Boolean, default=False)
     auxilio_por_dias_laborados: Mapped[bool] = mapped_column(Boolean, default=False)
     pagar_dia_31: Mapped[bool] = mapped_column(Boolean, default=False)
+    no_devengar_auxilio: Mapped[bool] = mapped_column(Boolean, default=False)
+    no_descontar_seguridad_social: Mapped[bool] = mapped_column(Boolean, default=False)
