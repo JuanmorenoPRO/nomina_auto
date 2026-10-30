@@ -127,7 +127,8 @@ dominio  ←  aplicacion  ←  infraestructura
 - **Días no remunerados (número por empleado y quincena):** permiso o licencia sin sueldo.
   Cada día le quita al presupuesto de la quincena una jornada de mes comercial
   (`divisor_hora_ordinaria`/30) —y con él al tiempo ordinario y al IBC— y al auxilio
-  `mensual/30`. Es la marca para permisos de pocos días: «quincena incompleta» paga solo
+  `mensual/30` (el auxilio queda en `15 − N` días y **manda sobre el auxilio prorrateado**,
+  que sobre lo no-extra tiene el mismo problema). Es la marca para permisos de pocos días: «quincena incompleta» paga solo
   lo no-extra, y con `semanal_legal` eso le quita también descansos remunerados y la parte
   de la semana ya cumplida en la quincena anterior (caso Rigoberto, Río Claro oct-2026:
   70 h = 10 días en vez de 13). Referencia: `tests/dominio/test_dias_no_remunerados.py`.

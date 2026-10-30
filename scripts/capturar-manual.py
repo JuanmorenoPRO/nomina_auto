@@ -196,7 +196,7 @@ def capturar(page: Page) -> None:
     guardar(page.locator(".previa-encabezado"), "06-previa-encabezado.png")
     guardar(page.locator(".previa-estados"), "07-previa-estados.png")
     guardar(
-        page.locator(".modal-previa div.fila").filter(has_text="No laboró todas las horas"),
+        page.locator(".previa-ajustes"),
         "08-previa-ajustes.png",
     )
     cerrar_previa(page)
@@ -217,7 +217,7 @@ def capturar(page: Page) -> None:
     # 12. Los tres ajustes ya marcados en el empleado de quincena incompleta.
     abrir_previa(page, EMPLEADO_PARCIAL)
     guardar(
-        page.locator(".modal-previa div.fila").filter(has_text="No laboró todas las horas"),
+        page.locator(".previa-ajustes"),
         "13-previa-ajustes-marcados.png",
     )
     cerrar_previa(page)

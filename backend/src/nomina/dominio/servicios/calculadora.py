@@ -174,7 +174,9 @@ def liquidar(
     (`divisor`/30 h), y con él al tiempo ordinario y al auxilio de transporte
     (`mensual/30` por día). A diferencia de `quincena_completa=False`, no depende de
     cuántas horas quedaron como extra: los descansos remunerados y las horas que la
-    estrategia semanal convirtió en extra siguen cubiertos por el salario.
+    estrategia semanal convirtió en extra siguen cubiertos por el salario. Con días
+    no remunerados el auxilio son los días pagados aunque `auxilio_prorrateado` esté
+    marcado: el prorrateo sobre lo no-extra tiene el mismo problema.
 
     Las marcas comparten la base de «lo laborado»: todo lo trabajado que no sea extra,
     topado al presupuesto legal. Ver el comentario en el cuerpo.
@@ -320,9 +322,19 @@ def liquidar(
 
     if incluir_auxilio_transporte:
         mensual = parametros.auxilio_transporte_mensual(fecha_periodo)
-        if not auxilio_prorrateado:
+        componentes_auxilio: dict[str, Decimal]
+        if dias_no_remunerados:
+            # Los días mandan sobre el prorrateo: el auxilio son los días pagados de la
+            # quincena (15 − N) de mes comercial. Prorratear sobre lo no-extra repetiría
+            # el error de la quincena incompleta: con muchas extras se come los descansos.
+            dias_pagados = (
+                minutos_presupuesto / minutos_dia_comercial - dias_no_remunerados
+            )
+            auxilio = mensual * dias_pagados / DIAS_MES_COMERCIAL
+            componentes_auxilio = {"dias_no_remunerados": Decimal(dias_no_remunerados)}
+        elif not auxilio_prorrateado:
             auxilio = mensual / 2
-            componentes_auxilio: dict[str, Decimal] = {}
+            componentes_auxilio = {}
         else:
             # Proporción de lo laborado: pesos del mes × horas / horas del mes.
             # Se prorratea aunque la quincena se liquide completa — son dos marcas
@@ -331,11 +343,6 @@ def liquidar(
             horas_base = Decimal(minutos_base_auxilio) / MINUTOS_POR_HORA
             auxilio = mensual * horas_base / parametros.divisor_hora_ordinaria(fecha_periodo)
             componentes_auxilio = {"horas_laboradas": horas_base}
-        if dias_no_remunerados and not auxilio_prorrateado:
-            # Plano menos un día de mes comercial por cada día no remunerado. Con el
-            # prorrateo no hace falta: su base ya está topada al presupuesto reducido.
-            auxilio -= mensual * dias_no_remunerados / DIAS_MES_COMERCIAL
-            componentes_auxilio = {"dias_no_remunerados": Decimal(dias_no_remunerados)}
         conceptos.append(
             ConceptoLiquidado(
                 codigo="auxilio_transporte",
