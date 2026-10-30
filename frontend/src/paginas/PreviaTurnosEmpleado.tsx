@@ -89,8 +89,8 @@ const TITULO_NO_DESCONTAR_SEGURIDAD_SOCIAL =
 
 const TITULO_DIAS_NO_REMUNERADOS =
   "Permiso o licencia sin sueldo: cada día descuenta una jornada (7 h) del tiempo " +
-  "ordinario y 1/30 del auxilio de transporte mensual. Los descansos, las extras y " +
-  "los recargos no cambian. La quincena se paga siempre como 15 días, así que el " +
+  "ordinario y 1/30 del auxilio de transporte mensual (manda sobre el auxilio " +
+  "prorrateado). Los descansos, las extras y los recargos no cambian. La quincena se paga siempre como 15 días, así que el " +
   "día 31 normalmente no se cuenta.";
 
 const TITULO_JORNADA_ORDINARIA =
@@ -797,6 +797,13 @@ export function PreviaTurnosEmpleado({
             />
             No devengar auxilio de transporte esta quincena (excepción contable)
           </label>
+          {auxilioPorDias && diasNoRemuneradosGuardados > 0 && (
+            <p className="aviso-advertencia" style={{ margin: 0 }}>
+              ⚠ Con días no remunerados el auxilio se paga por días (
+              {15 - diasNoRemuneradosGuardados} de 15), no con lo laborado: esta casilla
+              no aplica.
+            </p>
+          )}
           {auxilioPorDias && noDevengarAuxilio && (
             <p className="aviso-advertencia" style={{ margin: 0 }}>
               ⚠ &ldquo;No devengar auxilio&rdquo; gana sobre &ldquo;Calcular el auxilio

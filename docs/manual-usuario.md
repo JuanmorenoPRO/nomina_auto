@@ -668,7 +668,7 @@ Revise en *Configuración* → *Parámetros legales* que no aparezca el aviso ro
 | **Jornada ordinaria** *(marca de turno)* | Turno registrado solo para cuadrar horas; sus primeras N horas las cubre el salario |
 | **Turno de relleno** | Turno de jornada ordinaria creado por el sistema en un día vacío (06:00–13:00) |
 | **Quincena incompleta** *(marca)* | El tiempo ordinario se paga sobre lo trabajado, no sobre el presupuesto |
-| **Días no remunerados** *(marca)* | Permiso o licencia sin sueldo: cada día descuenta 7 h del tiempo ordinario y 1/30 del auxilio mensual |
+| **Días no remunerados** *(marca)* | Permiso o licencia sin sueldo: cada día descuenta 7 h del tiempo ordinario y 1/30 del auxilio mensual (manda sobre el auxilio prorrateado) |
 | **Auxilio prorrateado** *(marca)* | El auxilio de transporte se paga en proporción a las horas trabajadas |
 | **Plantilla de turnos** | Excel con una hoja por empleado que se descarga, se llena y se vuelve a subir |
 | **Devengado** | Lo que se le paga al empleado |

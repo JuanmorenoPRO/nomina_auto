@@ -96,8 +96,21 @@ def test_baja_el_ibc_de_los_aportes():
     assert abs(ibc(sin) - ibc(con) - menos) < 25  # salud se redondea a pesos: ±0,5 / 4 %
 
 
-def test_con_auxilio_prorrateado_topa_la_base_al_presupuesto_reducido():
-    """Base de lo laborado = min(no-extra, presupuesto): con 15 días de permiso, 0."""
+def test_los_dias_mandan_sobre_el_auxilio_prorrateado():
+    """Caso real en prod: con el prorrateo marcado salían 70 h no-extra = $83.032.
+    Con 2 días de permiso el auxilio son 13 días: 249.095 × 13/30 = $107.941."""
+    liq = _liquidar(dias_no_remunerados=2, auxilio_prorrateado=True)
+    auxilio = _concepto(liq, "auxilio_transporte")
+    assert auxilio.valor == _pesos(AUXILIO_MENSUAL * 13 / 30)
+    assert auxilio.componentes == {"dias_no_remunerados": Decimal(2)}
+
+
+def test_sin_dias_el_prorrateo_sigue_igual():
+    liq = _liquidar(auxilio_prorrateado=True)
+    assert _concepto(liq, "auxilio_transporte").componentes == {"horas_laboradas": Decimal(70)}
+
+
+def test_quince_dias_de_permiso_no_pagan_ordinario_ni_auxilio():
     liq = _liquidar(dias_no_remunerados=15, auxilio_prorrateado=True)
     assert _concepto(liq, "tiempo_ordinario").horas == 0
     assert _concepto(liq, "auxilio_transporte").valor == 0
