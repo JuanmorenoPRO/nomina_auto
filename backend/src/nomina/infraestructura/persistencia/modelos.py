@@ -244,6 +244,8 @@ class AjusteQuincenaModel(Base):
     - `no_descontar_seguridad_social`: excepción contable puntual — no se descuentan
       salud ni pensión esa quincena, aunque la unidad tenga
       `descuenta_seguridad_social=True`.
+    - `dias_no_remunerados`: días de permiso o licencia sin sueldo; cada uno le
+      quita al tiempo ordinario y al auxilio un día de mes comercial.
     """
 
     __tablename__ = "ajuste_quincena"
@@ -258,3 +260,4 @@ class AjusteQuincenaModel(Base):
     pagar_dia_31: Mapped[bool] = mapped_column(Boolean, default=False)
     no_devengar_auxilio: Mapped[bool] = mapped_column(Boolean, default=False)
     no_descontar_seguridad_social: Mapped[bool] = mapped_column(Boolean, default=False)
+    dias_no_remunerados: Mapped[int] = mapped_column(Integer, default=0)

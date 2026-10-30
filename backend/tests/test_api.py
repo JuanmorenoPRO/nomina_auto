@@ -233,6 +233,53 @@ def test_auxilio_prorrateado_manda_sobre_incapacitado(client):
     assert auxilio["componentes"] == {"horas_laboradas": "24"}
 
 
+def test_dias_no_remunerados_descuentan_ordinario_y_auxilio(client):
+    """Permiso sin sueldo de 2 días: 105 − 2 × 7 = 91 h y auxilio de 13 días."""
+    unidad = client.post("/unidades", json={"nombre": "Edificio Permiso P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "RIGO PERMISO",
+            "documento": "71392881",
+            "cargo": "vigilante",
+            "salario_base": 2_200_000,
+        },
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-08-01", "fecha_fin": "2026-08-15"}
+    ).json()
+    client.post(
+        "/turnos",
+        json={
+            "empleado_id": empleado["id"],
+            "fecha": "2026-08-03",
+            "hora_inicio": "06:00",
+            "hora_fin": "14:00",
+        },
+    )
+    params = {"empleado_id": empleado["id"], "periodo_id": periodo["id"]}
+    assert client.get("/ajustes-quincena", params=params).json()["dias_no_remunerados"] == 0
+
+    r = client.put("/ajustes-quincena", params=params, json={"dias_no_remunerados": 16})
+    assert r.status_code == 422
+
+    r = client.put("/ajustes-quincena", params=params, json={"dias_no_remunerados": 2})
+    assert r.status_code == 200
+    assert r.json()["dias_no_remunerados"] == 2
+    assert r.json()["quincena_incompleta"] is False
+
+    liq = client.post(
+        f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}
+    ).json()
+    conceptos = {c["codigo"]: c for c in liq["empleados"][0]["conceptos"]}
+    # 91 h × 2.200.000/210 = 953.333,3
+    assert conceptos["tiempo_ordinario"]["valor"] == 953_333
+    # 249.095 × 13/30 = 107.941,2
+    assert conceptos["auxilio_transporte"]["valor"] == 107_941
+    assert conceptos["auxilio_transporte"]["componentes"] == {"dias_no_remunerados": "2"}
+
+
 def test_validaciones_de_turnos(client):
     unidad = client.post("/unidades", json={"nombre": "Unidad B"}).json()
     empleado = client.post(

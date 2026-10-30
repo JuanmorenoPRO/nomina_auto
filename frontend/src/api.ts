@@ -193,6 +193,7 @@ export const api = {
         pagar_dia_31: boolean;
         no_devengar_auxilio: boolean;
         no_descontar_seguridad_social: boolean;
+        dias_no_remunerados: number;
       }>,
     ) =>
       pedir<AjusteQuincena>(

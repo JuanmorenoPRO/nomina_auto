@@ -124,6 +124,8 @@ class AjusteQuincenaActualizar(BaseModel):
     pagar_dia_31: bool | None = None
     no_devengar_auxilio: bool | None = None
     no_descontar_seguridad_social: bool | None = None
+    # El tope real (los días que caben en el presupuesto) lo valida el dominio.
+    dias_no_remunerados: int | None = Field(default=None, ge=0, le=15)
 
 
 class AjusteQuincenaRespuesta(BaseModel):
@@ -135,6 +137,7 @@ class AjusteQuincenaRespuesta(BaseModel):
     pagar_dia_31: bool
     no_devengar_auxilio: bool
     no_descontar_seguridad_social: bool
+    dias_no_remunerados: int
 
 
 class PeriodoCrear(BaseModel):

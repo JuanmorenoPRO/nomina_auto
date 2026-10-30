@@ -95,7 +95,9 @@ class RepositorioAjustesQuincena(Protocol):
       transporte esa quincena, sin importar `incapacitado`/`ocasional` ni
       `auxilio_por_dias_laborados`.
     - `no_descontar_seguridad_social`: excepción contable puntual — no descontar
-      salud ni pensión esa quincena, aunque la unidad las tenga activadas."""
+      salud ni pensión esa quincena, aunque la unidad las tenga activadas.
+    - `dias_no_remunerados`: días de permiso o licencia sin sueldo; cada uno le
+      quita al tiempo ordinario y al auxilio un día de mes comercial."""
 
     def quincena_incompleta(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def sin_extras(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
@@ -103,6 +105,7 @@ class RepositorioAjustesQuincena(Protocol):
     def pagar_dia_31(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def no_devengar_auxilio(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
     def no_descontar_seguridad_social(self, empleado_id: UUID, periodo_id: UUID) -> bool: ...
+    def dias_no_remunerados(self, empleado_id: UUID, periodo_id: UUID) -> int: ...
 
 
 @dataclass(frozen=True)
@@ -192,6 +195,9 @@ class LiquidarQuincena:
                 descontar_seguridad_social=unidad.descuenta_seguridad_social and not no_seg_social,
                 quincena_completa=not incompleta,
                 pagar_dia_31=dia_31,
+                dias_no_remunerados=self.ajustes_quincena.dias_no_remunerados(
+                    empleado.id, periodo_id
+                ),
             )
             por_empleado.append(LiquidacionEmpleado(empleado=empleado, liquidacion=resultado))
 
