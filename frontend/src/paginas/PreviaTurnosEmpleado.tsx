@@ -93,6 +93,17 @@ const TITULO_DIAS_NO_REMUNERADOS =
   "prorrateado). Los descansos, las extras y los recargos no cambian. La quincena se paga siempre como 15 días, así que el " +
   "día 31 normalmente no se cuenta.";
 
+const TITULO_QUINCENA_INCOMPLETA =
+  "No laboró todas las horas de la quincena (incapacidad, ingreso o retiro a mitad de " +
+  "periodo): el tiempo ordinario se paga sobre las horas trabajadas que no son extra " +
+  "(festivas y nocturnas incluidas) en vez del presupuesto completo. Para un permiso " +
+  "de pocos días use «Días no remunerados».";
+
+const TITULO_SIN_EXTRAS =
+  "No calcular horas extra por turno: solo se cobra extra si se supera el total de " +
+  "horas de la quincena (el empleado concentró horas para descansar otros días). " +
+  "Los recargos nocturnos y dominicales se mantienen.";
+
 const TITULO_JORNADA_ORDINARIA =
   "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
   "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
@@ -547,21 +558,20 @@ export function PreviaTurnosEmpleado({
               {etiqueta}
             </label>
           ))}
-        </div>
-
-        <div className="fila" style={{ marginBottom: 12 }}>
-          <a
-            className="secundario"
-            href={api.turnos.urlPlantilla(periodo.id, unidad.id, empleado.id)}
-            title="Descarga esta tarjeta en Excel, con los turnos que ya están registrados"
-          >
-            Descargar hoja
-          </a>
-          {!soloLectura && (
-            <button type="button" className="secundario" onClick={() => setImportando(true)}>
-              Importar hoja
-            </button>
-          )}
+          <div className="previa-acciones">
+            <a
+              className="secundario"
+              href={api.turnos.urlPlantilla(periodo.id, unidad.id, empleado.id)}
+              title="Descarga esta tarjeta en Excel, con los turnos que ya están registrados"
+            >
+              Descargar hoja
+            </a>
+            {!soloLectura && (
+              <button type="button" className="secundario" onClick={() => setImportando(true)}>
+                Importar hoja
+              </button>
+            )}
+          </div>
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -572,255 +582,267 @@ export function PreviaTurnosEmpleado({
           </div>
         )}
 
-        <div className="previa-scroll">
-          <table className="tarjeta-turnos">
-            <thead>
-              <tr>
-                <th>Día</th>
-                <th>N.º</th>
-                <th>Entra</th>
-                <th>Sale</th>
-                <th title={TITULO_JORNADA_ORDINARIA}>Jornada ord.</th>
-                <th>Total h</th>
-                <th>Descanso</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dias.map((d) => {
-                const fecha = fechaLocal(d);
-                const esFestivo = festivos.has(d);
-                const esDomingo = fecha.getDay() === 0;
-                const filaPares = pares[d] ?? [];
-                const min = minutosDia(d);
-                const descanso = filaPares.every((p) => !p.inicio.trim() && !p.fin.trim());
-                return (
-                  <tr key={d} className={esFestivo || esDomingo ? "dia-descanso" : ""}>
-                    <td>
-                      {DIAS_SEMANA[fecha.getDay()]}
-                      {esFestivo ? " ✦" : ""}
-                    </td>
-                    <td className="num-dia">{fecha.getDate()}</td>
-                    <td className="celda-horas">
-                      {filaPares.length === 0 && <span className="atenuado">—</span>}
-                      {filaPares.map((p, i) => (
-                        <div key={i} className="linea-hora">
-                          {soloLectura ? (
-                            <span>{p.inicio || "—"}</span>
-                          ) : (
-                            <input
-                              value={p.inicio}
-                              placeholder="hh"
-                              onChange={(e) => editar(d, i, "inicio", e.target.value)}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="celda-horas">
-                      {filaPares.length === 0 && <span className="atenuado">—</span>}
-                      {filaPares.map((p, i) => (
-                        <div key={i} className="linea-hora">
-                          {soloLectura ? (
-                            <span>{p.fin || "—"}</span>
-                          ) : (
-                            <>
-                              <input
-                                value={p.fin}
-                                placeholder="hh"
-                                onChange={(e) => editar(d, i, "fin", e.target.value)}
-                              />
-                              {filaPares.length > 1 && (
-                                <button
-                                  type="button"
-                                  title="Quitar turno"
-                                  className="quitar-par"
-                                  onClick={() => quitarPar(d, i)}
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="celda-jornada" title={TITULO_JORNADA_ORDINARIA}>
-                      {filaPares.map((p, i) => {
-                        const marcado = p.jornadaOrdinaria !== null;
-                        if (soloLectura) {
-                          return (
-                            <div key={i} className="linea-hora">
-                              {marcado ? (
-                                <span>{p.jornadaOrdinaria} h</span>
-                              ) : (
-                                <span className="atenuado">—</span>
-                              )}
-                            </div>
-                          );
-                        }
-                        // La casilla se dibuja siempre: en un día sin horas,
-                        // marcarla crea el turno de relleno con su horario.
-                        return (
+        <div className="previa-cuerpo">
+          <div className="previa-scroll">
+            <table className="tarjeta-turnos">
+              <thead>
+                <tr>
+                  <th>Día</th>
+                  <th>N.º</th>
+                  <th>Entra</th>
+                  <th>Sale</th>
+                  <th title={TITULO_JORNADA_ORDINARIA}>Jornada ord.</th>
+                  <th>Total h</th>
+                  <th>Descanso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dias.map((d) => {
+                  const fecha = fechaLocal(d);
+                  const esFestivo = festivos.has(d);
+                  const esDomingo = fecha.getDay() === 0;
+                  const filaPares = pares[d] ?? [];
+                  const min = minutosDia(d);
+                  const descanso = filaPares.every((p) => !p.inicio.trim() && !p.fin.trim());
+                  return (
+                    <tr key={d} className={esFestivo || esDomingo ? "dia-descanso" : ""}>
+                      <td>
+                        {DIAS_SEMANA[fecha.getDay()]}
+                        {esFestivo ? " ✦" : ""}
+                      </td>
+                      <td className="num-dia">{fecha.getDate()}</td>
+                      <td className="celda-horas">
+                        {filaPares.length === 0 && <span className="atenuado">—</span>}
+                        {filaPares.map((p, i) => (
                           <div key={i} className="linea-hora">
-                            <input
-                              type="checkbox"
-                              checked={marcado}
-                              aria-label="Jornada ordinaria"
-                              onChange={(e) => alternarJornada(d, i, p, e.target.checked)}
-                            />
-                            {marcado && (
+                            {soloLectura ? (
+                              <span>{p.inicio || "—"}</span>
+                            ) : (
                               <input
-                                className="horas-jornada"
-                                value={p.jornadaOrdinaria ?? ""}
-                                inputMode="decimal"
-                                aria-label="Horas de jornada ordinaria"
-                                onChange={(e) =>
-                                  actualizarPar(d, i, { jornadaOrdinaria: e.target.value })
-                                }
-                                onBlur={() => confirmarJornada(d, i, p)}
-                                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                                value={p.inicio}
+                                placeholder="hh"
+                                onChange={(e) => editar(d, i, "inicio", e.target.value)}
                               />
                             )}
                           </div>
-                        );
-                      })}
-                    </td>
-                    <td className="total">{min > 0 ? (min / 60).toFixed(1) : ""}</td>
-                    <td className="celda-descanso">
-                      {descanso && <span className="atenuado">Descanso</span>}
-                      {!soloLectura && (
-                        <button
-                          type="button"
-                          className="agregar-par"
-                          title="Agregar turno (turno partido)"
-                          onClick={() => agregarPar(d)}
-                        >
-                          + turno
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={5} style={{ textAlign: "right", fontWeight: 600 }}>
-                  Total quincena
-                </td>
-                <td className="total">{(totalMinutos / 60).toFixed(1)}</td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
+                        ))}
+                      </td>
+                      <td className="celda-horas">
+                        {filaPares.length === 0 && <span className="atenuado">—</span>}
+                        {filaPares.map((p, i) => (
+                          <div key={i} className="linea-hora">
+                            {soloLectura ? (
+                              <span>{p.fin || "—"}</span>
+                            ) : (
+                              <>
+                                <input
+                                  value={p.fin}
+                                  placeholder="hh"
+                                  onChange={(e) => editar(d, i, "fin", e.target.value)}
+                                />
+                                {filaPares.length > 1 && (
+                                  <button
+                                    type="button"
+                                    title="Quitar turno"
+                                    className="quitar-par"
+                                    onClick={() => quitarPar(d, i)}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="celda-jornada" title={TITULO_JORNADA_ORDINARIA}>
+                        {filaPares.map((p, i) => {
+                          const marcado = p.jornadaOrdinaria !== null;
+                          if (soloLectura) {
+                            return (
+                              <div key={i} className="linea-hora">
+                                {marcado ? (
+                                  <span>{p.jornadaOrdinaria} h</span>
+                                ) : (
+                                  <span className="atenuado">—</span>
+                                )}
+                              </div>
+                            );
+                          }
+                          // La casilla se dibuja siempre: en un día sin horas,
+                          // marcarla crea el turno de relleno con su horario.
+                          return (
+                            <div key={i} className="linea-hora">
+                              <input
+                                type="checkbox"
+                                checked={marcado}
+                                aria-label="Jornada ordinaria"
+                                onChange={(e) => alternarJornada(d, i, p, e.target.checked)}
+                              />
+                              {marcado && (
+                                <input
+                                  className="horas-jornada"
+                                  value={p.jornadaOrdinaria ?? ""}
+                                  inputMode="decimal"
+                                  aria-label="Horas de jornada ordinaria"
+                                  onChange={(e) =>
+                                    actualizarPar(d, i, { jornadaOrdinaria: e.target.value })
+                                  }
+                                  onBlur={() => confirmarJornada(d, i, p)}
+                                  onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </td>
+                      <td className="total">{min > 0 ? (min / 60).toFixed(1) : ""}</td>
+                      <td className="celda-descanso">
+                        {descanso && <span className="atenuado">Descanso</span>}
+                        {!soloLectura && (
+                          <button
+                            type="button"
+                            className="agregar-par"
+                            title="Agregar turno (turno partido)"
+                            onClick={() => agregarPar(d)}
+                          >
+                            + turno
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5} style={{ textAlign: "right", fontWeight: 600 }}>
+                    Total quincena
+                  </td>
+                  <td className="total">{(totalMinutos / 60).toFixed(1)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <aside className="previa-ajustes" aria-label="Ajustes de la quincena">
+            <fieldset className="grupo-ajustes">
+              <legend>Tiempo ordinario</legend>
+              <label className="casilla" title={TITULO_QUINCENA_INCOMPLETA}>
+                <input
+                  type="checkbox"
+                  checked={quincenaIncompleta}
+                  disabled={soloLectura || guardandoIncompleta}
+                  onChange={(e) => marcarQuincenaIncompleta(e.target.checked)}
+                />
+                Quincena incompleta (pagar solo lo trabajado)
+              </label>
+              <label className="casilla" title={TITULO_DIAS_NO_REMUNERADOS}>
+                Días no remunerados
+                <input
+                  type="number"
+                  min={0}
+                  max={15}
+                  step={1}
+                  style={{ width: "4em" }}
+                  value={diasNoRemunerados}
+                  disabled={soloLectura || guardandoDiasNoRemunerados}
+                  onChange={(e) => setDiasNoRemunerados(e.target.value)}
+                  onBlur={guardarDiasNoRemunerados}
+                />
+              </label>
+              {quincenaIncompleta && diasNoRemuneradosGuardados > 0 && (
+                <p className="aviso-advertencia">
+                  ⚠ Están marcadas las dos: &ldquo;Quincena incompleta&rdquo; ya paga solo
+                  lo trabajado. Para un permiso de pocos días basta con los días no
+                  remunerados; desmarque la otra.
+                </p>
+              )}
+            </fieldset>
+
+            <fieldset className="grupo-ajustes">
+              <legend>Horas extra</legend>
+              <label className="casilla" title={TITULO_SIN_EXTRAS}>
+                <input
+                  type="checkbox"
+                  checked={sinExtras}
+                  disabled={soloLectura || guardandoSinExtras}
+                  onChange={(e) => marcarSinExtras(e.target.checked)}
+                />
+                Sin extras (solo sobre el tope de la quincena)
+              </label>
+              {dia31 !== undefined && (
+                <label className="casilla" title={TITULO_PAGAR_DIA_31}>
+                  <input
+                    type="checkbox"
+                    checked={pagarDia31}
+                    disabled={soloLectura || guardandoDia31}
+                    onChange={(e) => marcarPagarDia31(e.target.checked)}
+                  />
+                  Pagar aparte el día 31 ({(minutosDia(dia31) / 60).toFixed(1)} h)
+                </label>
+              )}
+              {sinExtras && pagarDia31 && dia31 !== undefined && (
+                <p className="aviso-advertencia">
+                  ⚠ &ldquo;Sin extras&rdquo; usa el presupuesto quincenal (105 h): si ese
+                  tope se agota antes del 31, las horas de ese día quedan como extras y el
+                  concepto DIA 31 no aparece en la liquidación. Para verlo, desactiva
+                  &ldquo;Sin extras&rdquo;.
+                </p>
+              )}
+            </fieldset>
+
+            <fieldset className="grupo-ajustes">
+              <legend>Auxilio de transporte</legend>
+              <label className="casilla" title={TITULO_AUXILIO_POR_DIAS}>
+                <input
+                  type="checkbox"
+                  checked={auxilioPorDias}
+                  disabled={soloLectura || guardandoAuxilio}
+                  onChange={(e) => marcarAuxilioPorDias(e.target.checked)}
+                />
+                Prorratear con lo laborado
+              </label>
+              <label className="casilla" title={TITULO_NO_DEVENGAR_AUXILIO}>
+                <input
+                  type="checkbox"
+                  checked={noDevengarAuxilio}
+                  disabled={soloLectura || guardandoNoAuxilio}
+                  onChange={(e) => marcarNoDevengarAuxilio(e.target.checked)}
+                />
+                No devengar esta quincena
+              </label>
+              {auxilioPorDias && diasNoRemuneradosGuardados > 0 && (
+                <p className="aviso-advertencia">
+                  ⚠ Con días no remunerados el auxilio se paga por días (
+                  {15 - diasNoRemuneradosGuardados} de 15), no con lo laborado: el
+                  prorrateo no aplica.
+                </p>
+              )}
+              {auxilioPorDias && noDevengarAuxilio && (
+                <p className="aviso-advertencia">
+                  ⚠ &ldquo;No devengar&rdquo; gana sobre el prorrateo: no se paga auxilio.
+                </p>
+              )}
+            </fieldset>
+
+            <fieldset className="grupo-ajustes">
+              <legend>Seguridad social</legend>
+              <label className="casilla" title={TITULO_NO_DESCONTAR_SEGURIDAD_SOCIAL}>
+                <input
+                  type="checkbox"
+                  checked={noDescontarSeguridadSocial}
+                  disabled={soloLectura || guardandoNoSeguridadSocial}
+                  onChange={(e) => marcarNoDescontarSeguridadSocial(e.target.checked)}
+                />
+                No descontar salud y pensión
+              </label>
+            </fieldset>
+            <p className="pista-ajustes">Pase el mouse sobre cada opción para ver el detalle.</p>
+          </aside>
         </div>
 
-        <div className="fila" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-          <label className="casilla">
-            <input
-              type="checkbox"
-              checked={quincenaIncompleta}
-              disabled={soloLectura || guardandoIncompleta}
-              onChange={(e) => marcarQuincenaIncompleta(e.target.checked)}
-            />
-            No laboró todas las horas de la quincena: pagar el tiempo ordinario sobre las horas trabajadas (festivas y nocturnas incluidas) en vez del presupuesto completo
-          </label>
-          <label className="casilla" title={TITULO_DIAS_NO_REMUNERADOS}>
-            Días no remunerados (permiso o licencia sin sueldo):
-            <input
-              type="number"
-              min={0}
-              max={15}
-              step={1}
-              style={{ width: "4em" }}
-              value={diasNoRemunerados}
-              disabled={soloLectura || guardandoDiasNoRemunerados}
-              onChange={(e) => setDiasNoRemunerados(e.target.value)}
-              onBlur={guardarDiasNoRemunerados}
-            />
-          </label>
-          {quincenaIncompleta && diasNoRemuneradosGuardados > 0 && (
-            <p className="aviso-advertencia" style={{ margin: 0 }}>
-              ⚠ Están marcadas las dos: &ldquo;No laboró todas las horas&rdquo; ya paga
-              solo lo trabajado. Para un permiso de pocos días basta con los días no
-              remunerados; desmarque la otra.
-            </p>
-          )}
-          <label className="casilla">
-            <input
-              type="checkbox"
-              checked={sinExtras}
-              disabled={soloLectura || guardandoSinExtras}
-              onChange={(e) => marcarSinExtras(e.target.checked)}
-            />
-            No calcular horas extra: solo cobrar extra si supera las horas de la quincena
-            (concentró horas para descansar otros días)
-          </label>
-          <label className="casilla" title={TITULO_AUXILIO_POR_DIAS}>
-            <input
-              type="checkbox"
-              checked={auxilioPorDias}
-              disabled={soloLectura || guardandoAuxilio}
-              onChange={(e) => marcarAuxilioPorDias(e.target.checked)}
-            />
-            Calcular el auxilio de transporte con lo laborado (
-            {(totalMinutos / 60).toFixed(1)} h registradas; se prorratea sobre las que no
-            son extra)
-          </label>
-          {dia31 !== undefined && (
-            <label className="casilla" title={TITULO_PAGAR_DIA_31}>
-              <input
-                type="checkbox"
-                checked={pagarDia31}
-                disabled={soloLectura || guardandoDia31}
-                onChange={(e) => marcarPagarDia31(e.target.checked)}
-              />
-              Pagar aparte el día 31 ({(minutosDia(dia31) / 60).toFixed(1)} h registradas):
-              la quincena se liquida como 15 días, así que ese día queda fuera del
-              presupuesto y sus horas se reconocen a hora base
-            </label>
-          )}
-          {sinExtras && pagarDia31 && dia31 !== undefined && (
-            <p className="aviso-advertencia" style={{ margin: 0 }}>
-              ⚠ &ldquo;Sin extras&rdquo; usa el presupuesto quincenal (105 h): si ese tope
-              se agota antes del 31, las horas de ese día quedan como extras y el concepto
-              DIA 31 no aparece en la liquidación. Para verlo, desactiva &ldquo;Sin
-              extras&rdquo;.
-            </p>
-          )}
-          <label className="casilla" title={TITULO_NO_DEVENGAR_AUXILIO}>
-            <input
-              type="checkbox"
-              checked={noDevengarAuxilio}
-              disabled={soloLectura || guardandoNoAuxilio}
-              onChange={(e) => marcarNoDevengarAuxilio(e.target.checked)}
-            />
-            No devengar auxilio de transporte esta quincena (excepción contable)
-          </label>
-          {auxilioPorDias && diasNoRemuneradosGuardados > 0 && (
-            <p className="aviso-advertencia" style={{ margin: 0 }}>
-              ⚠ Con días no remunerados el auxilio se paga por días (
-              {15 - diasNoRemuneradosGuardados} de 15), no con lo laborado: esta casilla
-              no aplica.
-            </p>
-          )}
-          {auxilioPorDias && noDevengarAuxilio && (
-            <p className="aviso-advertencia" style={{ margin: 0 }}>
-              ⚠ &ldquo;No devengar auxilio&rdquo; gana sobre &ldquo;Calcular el auxilio
-              con lo laborado&rdquo;: no se paga auxilio así esté prorrateado.
-            </p>
-          )}
-          <label className="casilla" title={TITULO_NO_DESCONTAR_SEGURIDAD_SOCIAL}>
-            <input
-              type="checkbox"
-              checked={noDescontarSeguridadSocial}
-              disabled={soloLectura || guardandoNoSeguridadSocial}
-              onChange={(e) => marcarNoDescontarSeguridadSocial(e.target.checked)}
-            />
-            No descontar seguridad social (salud y pensión) esta quincena (excepción
-            contable)
-          </label>
-        </div>
         {importando && (
           <ImportarTurnos
             unidad={unidad}
