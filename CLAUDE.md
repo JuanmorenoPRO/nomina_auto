@@ -124,6 +124,13 @@ dominio  ←  aplicacion  ←  infraestructura
 - **Quincena incompleta (marca por empleado y quincena):** el tiempo ordinario se paga sobre
   «lo laborado» en vez del presupuesto completo. No suprime nada más: dominicales, recargos
   nocturnos y extras se siguen liquidando en sus propias líneas.
+- **Días no remunerados (número por empleado y quincena):** permiso o licencia sin sueldo.
+  Cada día le quita al presupuesto de la quincena una jornada de mes comercial
+  (`divisor_hora_ordinaria`/30) —y con él al tiempo ordinario y al IBC— y al auxilio
+  `mensual/30`. Es la marca para permisos de pocos días: «quincena incompleta» paga solo
+  lo no-extra, y con `semanal_legal` eso le quita también descansos remunerados y la parte
+  de la semana ya cumplida en la quincena anterior (caso Rigoberto, Río Claro oct-2026:
+  70 h = 10 días en vez de 13). Referencia: `tests/dominio/test_dias_no_remunerados.py`.
 - **Auxilio prorrateado (marca por empleado y quincena):** el auxilio de transporte se paga
   en proporción a lo laborado, `mensual × horas / divisor_hora_ordinaria`, en vez del
   quincenal plano. Es la cuenta de la contadora (`mensual/30 × días`, con `días = horas /

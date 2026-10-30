@@ -94,7 +94,10 @@ De principio a fin:
 1. **Crear el periodo** (si no existe) en *Unidades y empleados* → *Periodos de liquidación*.
 2. **Digitar los turnos** de cada unidad en *Cuadro de turnos*.
 3. **Revisar empleado por empleado** con el botón 🗂 (la tarjeta de turnos), y marcar allí
-   los ajustes que apliquen: quincena incompleta, sin extras, auxilio prorrateado.
+   los ajustes que apliquen: quincena incompleta, días no remunerados, sin extras,
+   auxilio prorrateado. Para un **permiso no remunerado** de uno o pocos días use
+   *Días no remunerados*, no *quincena incompleta*: esta última paga solo las horas que
+   no quedaron como extra, así que con muchas extras le quita también los descansos.
 4. **Cargar los conceptos manuales** (préstamos, bonos, descuentos) en *Unidades y empleados*.
 5. **Liquidar cada unidad** en *Liquidación* y revisar el desglose.
 6. **Descargar el Excel** de cada unidad.
@@ -665,6 +668,7 @@ Revise en *Configuración* → *Parámetros legales* que no aparezca el aviso ro
 | **Jornada ordinaria** *(marca de turno)* | Turno registrado solo para cuadrar horas; sus primeras N horas las cubre el salario |
 | **Turno de relleno** | Turno de jornada ordinaria creado por el sistema en un día vacío (06:00–13:00) |
 | **Quincena incompleta** *(marca)* | El tiempo ordinario se paga sobre lo trabajado, no sobre el presupuesto |
+| **Días no remunerados** *(marca)* | Permiso o licencia sin sueldo: cada día descuenta 7 h del tiempo ordinario y 1/30 del auxilio mensual |
 | **Auxilio prorrateado** *(marca)* | El auxilio de transporte se paga en proporción a las horas trabajadas |
 | **Plantilla de turnos** | Excel con una hoja por empleado que se descarga, se llena y se vuelve a subir |
 | **Devengado** | Lo que se le paga al empleado |

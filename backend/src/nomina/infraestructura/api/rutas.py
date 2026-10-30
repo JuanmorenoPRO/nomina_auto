@@ -389,7 +389,9 @@ def obtener_ajuste_quincena(
     días con turno en vez de pagar el quincenal plano), `pagar_dia_31` (reconocer
     aparte las horas del día 31, que el presupuesto de 15 días no cubre),
     `no_devengar_auxilio` y `no_descontar_seguridad_social` (excepciones contables
-    puntuales: no pagar el auxilio o no descontar salud/pensión esa quincena)."""
+    puntuales: no pagar el auxilio o no descontar salud/pensión esa quincena) y
+    `dias_no_remunerados` (permiso o licencia sin sueldo: descuenta esos días del
+    tiempo ordinario y del auxilio)."""
     repo = RepositorioAjustesQuincenaSQL(session)
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id,
@@ -402,6 +404,7 @@ def obtener_ajuste_quincena(
         no_descontar_seguridad_social=repo.no_descontar_seguridad_social(
             empleado_id, periodo_id
         ),
+        dias_no_remunerados=repo.dias_no_remunerados(empleado_id, periodo_id),
     )
 
 
@@ -427,6 +430,7 @@ def marcar_ajuste_quincena(
         pagar_dia_31=datos.pagar_dia_31,
         no_devengar_auxilio=datos.no_devengar_auxilio,
         no_descontar_seguridad_social=datos.no_descontar_seguridad_social,
+        dias_no_remunerados=datos.dias_no_remunerados,
     )
     incompleta = repo.quincena_incompleta(empleado_id, periodo_id)
     sin_extras = repo.sin_extras(empleado_id, periodo_id)
@@ -434,16 +438,19 @@ def marcar_ajuste_quincena(
     dia_31 = repo.pagar_dia_31(empleado_id, periodo_id)
     no_auxilio = repo.no_devengar_auxilio(empleado_id, periodo_id)
     no_seg_social = repo.no_descontar_seguridad_social(empleado_id, periodo_id)
+    dias_no_remunerados = repo.dias_no_remunerados(empleado_id, periodo_id)
     auditar(session, usuario.email, "actualizar", "ajuste_quincena", f"{empleado_id}:{periodo_id}",
             despues={"quincena_incompleta": incompleta, "sin_extras": sin_extras,
                      "auxilio_por_dias_laborados": auxilio_por_dias, "pagar_dia_31": dia_31,
                      "no_devengar_auxilio": no_auxilio,
-                     "no_descontar_seguridad_social": no_seg_social})
+                     "no_descontar_seguridad_social": no_seg_social,
+                     "dias_no_remunerados": dias_no_remunerados})
     return schemas.AjusteQuincenaRespuesta(
         empleado_id=empleado_id, periodo_id=periodo_id,
         quincena_incompleta=incompleta, sin_extras=sin_extras,
         auxilio_por_dias_laborados=auxilio_por_dias, pagar_dia_31=dia_31,
         no_devengar_auxilio=no_auxilio, no_descontar_seguridad_social=no_seg_social,
+        dias_no_remunerados=dias_no_remunerados,
     )
 
 

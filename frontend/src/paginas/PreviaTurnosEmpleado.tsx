@@ -87,6 +87,12 @@ const TITULO_NO_DESCONTAR_SEGURIDAD_SOCIAL =
   "Excepción contable puntual: no se descuentan salud ni pensión en esta " +
   "quincena, aunque la unidad tenga activado el descuento de seguridad social.";
 
+const TITULO_DIAS_NO_REMUNERADOS =
+  "Permiso o licencia sin sueldo: cada día descuenta una jornada (7 h) del tiempo " +
+  "ordinario y 1/30 del auxilio de transporte mensual. Los descansos, las extras y " +
+  "los recargos no cambian. La quincena se paga siempre como 15 días, así que el " +
+  "día 31 normalmente no se cuenta.";
+
 const TITULO_JORNADA_ORDINARIA =
   "Jornada ordinaria: el turno se registró para cuadrar las horas de la quincena, " +
   "no porque se trabajara. Las primeras horas indicadas no pagan recargo festivo " +
@@ -148,6 +154,10 @@ export function PreviaTurnosEmpleado({
   const [guardandoNoAuxilio, setGuardandoNoAuxilio] = useState(false);
   const [noDescontarSeguridadSocial, setNoDescontarSeguridadSocial] = useState(false);
   const [guardandoNoSeguridadSocial, setGuardandoNoSeguridadSocial] = useState(false);
+  // Texto del input: se guarda al salir del campo, no en cada tecla.
+  const [diasNoRemunerados, setDiasNoRemunerados] = useState("0");
+  const [diasNoRemuneradosGuardados, setDiasNoRemuneradosGuardados] = useState(0);
+  const [guardandoDiasNoRemunerados, setGuardandoDiasNoRemunerados] = useState(false);
   const [guardandoEstado, setGuardandoEstado] = useState<CampoEstado | null>(null);
   const [importando, setImportando] = useState(false);
 
@@ -161,6 +171,8 @@ export function PreviaTurnosEmpleado({
         setPagarDia31(a.pagar_dia_31);
         setNoDevengarAuxilio(a.no_devengar_auxilio);
         setNoDescontarSeguridadSocial(a.no_descontar_seguridad_social);
+        setDiasNoRemunerados(String(a.dias_no_remunerados));
+        setDiasNoRemuneradosGuardados(a.dias_no_remunerados);
       })
       .catch((e) => setError(e.message));
   }, [empleado.id, periodo.id]);
@@ -258,6 +270,27 @@ export function PreviaTurnosEmpleado({
       setError((err as Error).message);
     } finally {
       setGuardandoNoSeguridadSocial(false);
+    }
+  }
+
+  async function guardarDiasNoRemunerados() {
+    const valor = Number(diasNoRemunerados);
+    if (!Number.isInteger(valor) || valor < 0 || valor > 15) {
+      setError("Los días no remunerados deben ser un número entero entre 0 y 15");
+      setDiasNoRemunerados(String(diasNoRemuneradosGuardados));
+      return;
+    }
+    if (valor === diasNoRemuneradosGuardados) return;
+    setError("");
+    setGuardandoDiasNoRemunerados(true);
+    try {
+      await api.ajustesQuincena.marcar(empleado.id, periodo.id, { dias_no_remunerados: valor });
+      setDiasNoRemuneradosGuardados(valor);
+    } catch (err) {
+      setError((err as Error).message);
+      setDiasNoRemunerados(String(diasNoRemuneradosGuardados));
+    } finally {
+      setGuardandoDiasNoRemunerados(false);
     }
   }
 
@@ -692,6 +725,27 @@ export function PreviaTurnosEmpleado({
             />
             No laboró todas las horas de la quincena: pagar el tiempo ordinario sobre las horas trabajadas (festivas y nocturnas incluidas) en vez del presupuesto completo
           </label>
+          <label className="casilla" title={TITULO_DIAS_NO_REMUNERADOS}>
+            Días no remunerados (permiso o licencia sin sueldo):
+            <input
+              type="number"
+              min={0}
+              max={15}
+              step={1}
+              style={{ width: "4em" }}
+              value={diasNoRemunerados}
+              disabled={soloLectura || guardandoDiasNoRemunerados}
+              onChange={(e) => setDiasNoRemunerados(e.target.value)}
+              onBlur={guardarDiasNoRemunerados}
+            />
+          </label>
+          {quincenaIncompleta && diasNoRemuneradosGuardados > 0 && (
+            <p className="aviso-advertencia" style={{ margin: 0 }}>
+              ⚠ Están marcadas las dos: &ldquo;No laboró todas las horas&rdquo; ya paga
+              solo lo trabajado. Para un permiso de pocos días basta con los días no
+              remunerados; desmarque la otra.
+            </p>
+          )}
           <label className="casilla">
             <input
               type="checkbox"
@@ -710,7 +764,8 @@ export function PreviaTurnosEmpleado({
               onChange={(e) => marcarAuxilioPorDias(e.target.checked)}
             />
             Calcular el auxilio de transporte con lo laborado (
-            {(totalMinutos / 60).toFixed(1)} h)
+            {(totalMinutos / 60).toFixed(1)} h registradas; se prorratea sobre las que no
+            son extra)
           </label>
           {dia31 !== undefined && (
             <label className="casilla" title={TITULO_PAGAR_DIA_31}>

@@ -338,6 +338,10 @@ tooltip sobre el nombre del concepto. Detalle completo en
 - **Quincena incompleta (marca por empleado y quincena):** el tiempo ordinario se paga
   sobre «lo laborado» (todos los minutos no-extra, festivos y nocturnos incluidos) en vez
   del presupuesto completo.
+- **Días no remunerados (número por empleado y quincena):** permiso o licencia sin
+  sueldo. Cada día le quita al presupuesto una jornada de mes comercial (`divisor/30`) y
+  al auxilio `mensual/30`. No depende de las extras, a diferencia de la quincena
+  incompleta (que con `semanal_legal` puede dejar muy pocas horas no-extra).
 - **Auxilio prorrateado (marca por empleado y quincena):** `mensual × horas / divisor`, en
   vez del quincenal plano. Manda sobre `incapacitado` / `ocasional`.
 

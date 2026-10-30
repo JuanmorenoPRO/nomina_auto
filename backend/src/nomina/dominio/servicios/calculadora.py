@@ -56,6 +56,10 @@ NO_SALARIALES = frozenset({"auxilio_transporte"})
 
 _UN_PESO = Decimal("1")
 
+# Mes comercial de la nómina colombiana: el divisor de la hora y el auxilio
+# mensual se reparten en 30 días, tenga el mes los que tenga.
+DIAS_MES_COMERCIAL = 30
+
 
 @dataclass(frozen=True)
 class _Clasificacion:
@@ -130,6 +134,7 @@ def liquidar(
     descontar_seguridad_social: bool = False,
     quincena_completa: bool = True,
     pagar_dia_31: bool = False,
+    dias_no_remunerados: int = 0,
 ) -> Liquidacion:
     """Liquida la quincena de un empleado a partir de sus tramos ya clasificados.
 
@@ -164,6 +169,13 @@ def liquidar(
     reconocen aparte a hora base (concepto `dia_31`). Los recargos y las extras del 31
     ya se pagan en sus propias líneas: aquí solo se agrega la hora base que falta.
 
+    `dias_no_remunerados` (default 0): días de permiso o licencia no remunerada. Le
+    quitan al presupuesto de la quincena una jornada de mes comercial por día
+    (`divisor`/30 h), y con él al tiempo ordinario y al auxilio de transporte
+    (`mensual/30` por día). A diferencia de `quincena_completa=False`, no depende de
+    cuántas horas quedaron como extra: los descansos remunerados y las horas que la
+    estrategia semanal convirtió en extra siguen cubiertos por el salario.
+
     Las marcas comparten la base de «lo laborado»: todo lo trabajado que no sea extra,
     topado al presupuesto legal. Ver el comentario en el cuerpo.
     """
@@ -184,7 +196,18 @@ def liquidar(
 
     conceptos: list[ConceptoLiquidado] = []
 
-    minutos_quincena_legal = int(parametros.horas_quincena(fecha_periodo) * MINUTOS_POR_HORA)
+    # Los días no remunerados salen del presupuesto: el salario no los cubre. La
+    # jornada del día es la del mes comercial (divisor / 30), la misma cuenta con que
+    # la quincena vale divisor / 30 × 15.
+    minutos_dia_comercial = (
+        parametros.divisor_hora_ordinaria(fecha_periodo) * MINUTOS_POR_HORA / DIAS_MES_COMERCIAL
+    )
+    minutos_presupuesto = int(parametros.horas_quincena(fecha_periodo) * MINUTOS_POR_HORA)
+    if not 0 <= dias_no_remunerados * minutos_dia_comercial <= minutos_presupuesto:
+        raise ValueError(
+            f"Días no remunerados fuera de rango para la quincena: {dias_no_remunerados}"
+        )
+    minutos_quincena_legal = minutos_presupuesto - int(dias_no_remunerados * minutos_dia_comercial)
 
     # Base de «lo laborado», compartida por el tiempo ordinario prorrateado y por el
     # auxilio: TODO lo trabajado que no sea extra, topado al presupuesto legal.
@@ -308,6 +331,11 @@ def liquidar(
             horas_base = Decimal(minutos_base_auxilio) / MINUTOS_POR_HORA
             auxilio = mensual * horas_base / parametros.divisor_hora_ordinaria(fecha_periodo)
             componentes_auxilio = {"horas_laboradas": horas_base}
+        if dias_no_remunerados and not auxilio_prorrateado:
+            # Plano menos un día de mes comercial por cada día no remunerado. Con el
+            # prorrateo no hace falta: su base ya está topada al presupuesto reducido.
+            auxilio -= mensual * dias_no_remunerados / DIAS_MES_COMERCIAL
+            componentes_auxilio = {"dias_no_remunerados": Decimal(dias_no_remunerados)}
         conceptos.append(
             ConceptoLiquidado(
                 codigo="auxilio_transporte",
