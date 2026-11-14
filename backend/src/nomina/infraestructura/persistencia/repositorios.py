@@ -554,6 +554,8 @@ class RepositorioLiquidacionesSQL:
                 salario_mensual=int(le.liquidacion.salario_mensual),
                 tarifa_hora=str(le.liquidacion.tarifa_hora),
                 minutos_sin_hora_base=le.liquidacion.minutos_sin_hora_base,
+                dias_laborados=le.liquidacion.dias_laborados,
+                dias_incapacidad=le.liquidacion.dias_incapacidad,
             )
             lineas = [(DEVENGADO, c) for c in le.liquidacion.conceptos]
             lineas += [(DEDUCCION, d) for d in le.liquidacion.deducciones]
@@ -640,6 +642,8 @@ class RepositorioLiquidacionesSQL:
                         conceptos=conceptos,
                         deducciones=deducciones,
                         minutos_sin_hora_base=le.minutos_sin_hora_base or 0,
+                        dias_laborados=le.dias_laborados,
+                        dias_incapacidad=le.dias_incapacidad,
                     ),
                 )
             )

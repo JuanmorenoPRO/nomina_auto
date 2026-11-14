@@ -248,6 +248,8 @@ def test_auxilio_prorrateado_manda_sobre_incapacitado(client):
     )
     assert auxilio["valor"] == 41_516
     assert auxilio["componentes"] == {"dias_laborados": "5", "dias_incapacidad": "10"}
+    assert liq3["empleados"][0]["dias_laborados"] == 5
+    assert liq3["empleados"][0]["dias_incapacidad"] == 10
 
 
 def test_novedades_dia(client):

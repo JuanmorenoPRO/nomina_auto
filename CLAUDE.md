@@ -149,6 +149,11 @@ dominio  ←  aplicacion  ←  infraestructura
   turno no se puede marcar (la API lo rechaza y la liquidación ignora la marca si
   aparece un turno después). Caso que la originó: Torre Laurel, nov-2026, incapacitado
   los 2 últimos días → 13 días de auxilio.
+  La liquidación guarda y muestra **INCAPACIDAD** (días marcados Incapacitado) y **DIAS
+  LAB** (`15 − incapacitados − no laboró − no remunerados`, la base del auxilio) en la hoja
+  de Excel de cada empleado (fila del salario, en rojo), en el resumen y en el detalle en
+  pantalla. Se calculan aunque no se pague auxilio; las liquidaciones anteriores al dato
+  los dejan vacíos (`NULL`).
 - **Día 31 (marca por empleado y quincena):** la quincena 16–fin de mes se paga SIEMPRE
   como 15 días (`horas_quincena` = `divisor_hora_ordinaria`/30 × 15), tenga el mes 30 o 31.
   En los meses de 31, ese día es un 16.º día que el salario no cubre: marcada, sus horas

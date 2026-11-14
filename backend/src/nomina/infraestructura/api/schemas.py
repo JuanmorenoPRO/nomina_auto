@@ -310,6 +310,9 @@ class LiquidacionEmpleadoRespuesta(BaseModel):
     # Ocurre cuando `sin_extras=True` fuerza `presupuesto_quincenal` y el tope
     # se agota antes del 31. "0.00" = el concepto DIA 31 capturó todo.
     horas_dia_31_bloqueadas: str = "0.00"
+    # DIAS LAB / INCAPACIDAD del comprobante. null = liquidación anterior al dato.
+    dias_laborados: int | None = None
+    dias_incapacidad: int | None = None
 
 
 class LiquidacionRespuesta(BaseModel):

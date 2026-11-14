@@ -351,19 +351,22 @@ def liquidar(
         Decimal(0),
     )
 
+    # Días laborados de la quincena, por días de mes comercial: la quincena vale 15
+    # (derivado de los parámetros, no quemado) y se restan los incapacitados, los no
+    # laborados y los no remunerados. Los descansos sí cuentan: son días remunerados.
+    # Se calculan siempre —se muestran en la liquidación (INCAPACIDAD / DIAS LAB)
+    # aunque no se pague auxilio— y son la misma base del auxilio por días.
+    marcados = _dias_marcados_por_tipo(dias_sin_auxilio or {}, fecha_periodo)
+    dias_quincena = minutos_presupuesto / minutos_dia_comercial
+    dias_pagados = max(
+        Decimal(0),
+        dias_quincena - dias_no_remunerados - sum(marcados.values()),
+    )
+
     if incluir_auxilio_transporte:
         mensual = parametros.auxilio_transporte_mensual(fecha_periodo)
-        marcados = _dias_marcados_por_tipo(dias_sin_auxilio or {}, fecha_periodo)
         componentes_auxilio: dict[str, Decimal] = {}
         if auxilio_prorrateado or dias_no_remunerados or any(marcados.values()):
-            # Por días de mes comercial: la quincena vale 15 (derivado de los
-            # parámetros, no quemado) y se restan los días que no generan auxilio.
-            # Los descansos sí cuentan: son días remunerados.
-            dias_quincena = minutos_presupuesto / minutos_dia_comercial
-            dias_pagados = max(
-                Decimal(0),
-                dias_quincena - dias_no_remunerados - sum(marcados.values()),
-            )
             auxilio = mensual * dias_pagados / DIAS_MES_COMERCIAL
             componentes_auxilio["dias_laborados"] = dias_pagados
             for clave, valor in (
@@ -424,4 +427,7 @@ def liquidar(
         deducciones=tuple(deducciones),
         minutos_sin_hora_base=minutos_sin_hora_base,
         minutos_dia_31_bloqueados=minutos_dia_31_bloqueados,
+        # 15 días (divisor/2 ÷ divisor/30) menos días enteros: siempre es entero.
+        dias_laborados=int(dias_pagados),
+        dias_incapacidad=marcados[INCAPACIDAD],
     )

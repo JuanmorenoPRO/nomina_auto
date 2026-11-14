@@ -75,6 +75,11 @@ class Liquidacion:
     agotó el presupuesto antes del 31. Ocurre cuando `sin_extras=True` convierte
     la estrategia a `presupuesto_quincenal` y el empleado ya trabajó ≥105 h en el
     período anterior al 31. Con 0 el concepto DIA 31 captura todo lo que debía.
+
+    `dias_laborados` y `dias_incapacidad` se muestran en el comprobante (DIAS LAB /
+    INCAPACIDAD): días laborados = 15 − incapacitados − no laboró − no remunerados
+    (la misma base del auxilio por días) y días marcados como incapacidad en el
+    cuadro de turnos. `None` = liquidación guardada antes de que existiera el dato.
     """
 
     salario_mensual: Decimal
@@ -83,6 +88,8 @@ class Liquidacion:
     deducciones: tuple[ConceptoLiquidado, ...] = ()
     minutos_sin_hora_base: int = 0
     minutos_dia_31_bloqueados: int = 0
+    dias_laborados: int | None = None
+    dias_incapacidad: int | None = None
 
     @property
     def total_devengado(self) -> Decimal:
