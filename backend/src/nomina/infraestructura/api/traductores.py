@@ -100,6 +100,8 @@ def liquidacion_a_schema(liq: LiquidacionQuincena) -> LiquidacionRespuesta:
             total=int(le.liquidacion.total),
             horas_sin_hora_base=f"{le.liquidacion.minutos_sin_hora_base / 60:.2f}",
             horas_dia_31_bloqueadas=f"{le.liquidacion.minutos_dia_31_bloqueados / 60:.2f}",
+            dias_laborados=le.liquidacion.dias_laborados,
+            dias_incapacidad=le.liquidacion.dias_incapacidad,
         )
         for le in liq.por_empleado
     ]

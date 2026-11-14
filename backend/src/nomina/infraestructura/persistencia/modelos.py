@@ -154,6 +154,9 @@ class LiquidacionEmpleadoModel(Base):
     # Alarma (no es un valor liquidado): minutos no-extra por encima de lo que el
     # salario cubre. Ver `Liquidacion.minutos_sin_hora_base`.
     minutos_sin_hora_base: Mapped[int] = mapped_column(Integer, default=0)
+    # DIAS LAB / INCAPACIDAD del comprobante. NULL = liquidación anterior al dato.
+    dias_laborados: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dias_incapacidad: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     liquidacion: Mapped[LiquidacionModel] = relationship(back_populates="empleados")
     conceptos: Mapped[list[ConceptoLiquidadoModel]] = relationship(

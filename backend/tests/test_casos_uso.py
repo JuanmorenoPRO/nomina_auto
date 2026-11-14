@@ -170,6 +170,11 @@ def test_auxilio_descuenta_los_dias_incapacitados(session, contexto):
     # 249.095 / 30 × 13 = 107.941,2 → 107.941
     assert auxilio.valor == Decimal(107_941)
 
+    # Los días del comprobante se guardan con la liquidación y se releen igual.
+    releida = RepositorioLiquidacionesSQL(session).obtener(liquidacion.id)
+    liq_empleado = releida.por_empleado[0].liquidacion
+    assert (liq_empleado.dias_incapacidad, liq_empleado.dias_laborados) == (2, 13)
+
 
 def test_marca_en_dia_con_turno_se_ignora(session, contexto):
     """Defensivo: si un día tiene turno y además marca, el turno manda (se trabajó)."""

@@ -118,6 +118,37 @@ def test_marcas_no_tocan_el_tiempo_ordinario():
     assert ordinario(sin) == ordinario(con)
 
 
+def _liquidacion(**kwargs):
+    tramos = segmentar_turnos(TURNOS_LAUREL, PARAMETROS, CalendarioFestivos())
+    clasificados = clasificar_extras(tramos, PARAMETROS, PERIODO)
+    return liquidar(clasificados, SALARIO, PARAMETROS, PERIODO, **kwargs)
+
+
+def test_dias_del_comprobante_torre_laurel():
+    """INCAPACIDAD / DIAS LAB del comprobante: la misma cuenta del auxilio."""
+    liq = _liquidacion(dias_sin_auxilio=INCAPACIDAD_LAUREL)
+    assert (liq.dias_incapacidad, liq.dias_laborados) == (2, 13)
+
+
+def test_dias_del_comprobante_sin_marcas():
+    liq = _liquidacion()
+    assert (liq.dias_incapacidad, liq.dias_laborados) == (0, 15)
+
+
+def test_no_laboro_y_no_remunerados_bajan_dias_lab_pero_no_la_incapacidad():
+    marcas = {date(2026, 11, 14): INCAPACIDAD, date(2026, 11, 15): NO_LABORO}
+    liq = _liquidacion(dias_sin_auxilio=marcas, dias_no_remunerados=1)
+    assert (liq.dias_incapacidad, liq.dias_laborados) == (1, 12)
+
+
+def test_los_dias_se_calculan_aunque_no_se_pague_auxilio():
+    """Empleado incapacitado/ocasional o «no devengar»: no hay auxilio, pero el
+    comprobante sigue mostrando los días."""
+    liq = _liquidacion(dias_sin_auxilio=INCAPACIDAD_LAUREL, incluir_auxilio_transporte=False)
+    assert "auxilio_transporte" not in {c.codigo for c in liq.conceptos}
+    assert (liq.dias_incapacidad, liq.dias_laborados) == (2, 13)
+
+
 def test_tipo_desconocido_es_error():
     with pytest.raises(ValueError, match="Novedad de día"):
         _auxilio(dias_sin_auxilio={date(2026, 11, 2): "vacaciones"})

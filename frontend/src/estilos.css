@@ -418,3 +418,6 @@ table.tarjeta-turnos .linea-hora input.horas-jornada {
   width: 38px;
   text-align: right;
 }
+
+/* Detalle de la liquidación: días de incapacidad en rojo, como en la planilla. */
+.dias-incapacidad { color: #dc2626; }

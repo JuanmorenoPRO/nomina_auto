@@ -213,6 +213,12 @@ function DetalleLiquidacion({ liquidacion }: { liquidacion: Liquidacion }) {
         <div key={emp.empleado_id}>
           <h3>
             {emp.nombre} — CC {emp.documento} · salario $ {pesos.format(emp.salario_mensual)}
+            {emp.dias_incapacidad !== null && (
+              <span className={emp.dias_incapacidad > 0 ? "dias-incapacidad" : ""}>
+                {" "}· Incapacidad {emp.dias_incapacidad}
+              </span>
+            )}
+            {emp.dias_laborados !== null && <> · Días lab. {emp.dias_laborados}</>}
           </h3>
           {Number(emp.horas_sin_hora_base) > 0 && (
             <div className="error">

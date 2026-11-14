@@ -10,6 +10,8 @@ from openpyxl.styles import Border, Font, PatternFill, Side
 
 NEGRITA = Font(bold=True)
 TITULO = Font(bold=True, size=13)
+# INCAPACIDAD / DIAS LAB junto al salario: en rojo, como en la planilla de la contadora.
+NEGRITA_ROJA = Font(bold=True, color="FF0000")
 PESOS = "#,##0"
 BORDE_FINO = Border(bottom=Side(style="thin"))
 

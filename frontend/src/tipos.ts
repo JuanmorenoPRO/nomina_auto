@@ -181,6 +181,9 @@ export interface LiquidacionEmpleado {
   horas_sin_hora_base: string;
   /** Aviso: horas del día 31 que quedaron como extras y no entraron en DIA 31. */
   horas_dia_31_bloqueadas: string;
+  /** DIAS LAB / INCAPACIDAD del comprobante; null = liquidación anterior al dato. */
+  dias_laborados: number | null;
+  dias_incapacidad: number | null;
 }
 
 export interface Liquidacion {
