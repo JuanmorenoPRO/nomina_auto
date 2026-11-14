@@ -379,6 +379,30 @@ table.tarjeta-turnos .agregar-par:hover { background: #e0edf9; }
 table.tarjeta-turnos .atenuado { color: #94a3b8; }
 table.tarjeta-turnos td.celda-descanso { white-space: nowrap; }
 
+/* Novedad de un día sin turno (incapacitado / no laboró): no cuenta para el
+   auxilio de transporte. Se ve en la tarjeta (fila) y en la grilla (marca). */
+table.tarjeta-turnos tr.novedad-incapacidad td { background: #fff7e6; }
+table.tarjeta-turnos tr.novedad-no_laboro td { background: #f1f5f9; }
+table.tarjeta-turnos select.selector-novedad {
+  font-size: 12px;
+  padding: 1px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+}
+.marca-novedad {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-right: 4px;
+  cursor: help;
+}
+.marca-novedad.incapacidad { background: #fde7c2; color: #92400e; }
+.marca-novedad.no_laboro { background: #e2e8f0; color: #334155; }
+.dias-auxilio { font-size: 12px; color: #334155; margin: 4px 0 0; }
+
 /* Columna «Jornada ord.» de la tarjeta por empleado: turno registrado solo para
    cuadrar las horas de la quincena. */
 table.tarjeta-turnos td.celda-jornada { min-width: 74px; }

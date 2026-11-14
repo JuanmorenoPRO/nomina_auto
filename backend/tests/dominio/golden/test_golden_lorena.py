@@ -6,8 +6,11 @@ de la quincena. Es el caso que definió la regla de «liquidar sobre lo trabajad
 - La contadora liquida **49 h de TIEMPO ORDINARIO** = todas las horas laboradas,
   con las 14 h festivas incluidas — no solo las de día ordinario.
 - Encima paga TIEMPO FESTIVO con su factor completo (×1.90).
-- El auxilio va en proporción a lo laborado: `mensual × 49 / 210` = $58.122,
-  que es lo mismo que su `mensual/30 × 7 días` con jornada de 7 h.
+- El auxilio: la hoja paga `mensual/30 × 7 días` = $58.122, sacando los días de
+  las horas (`49 h ÷ 7 h`). Diferencia DELIBERADA: desde nov-2026 el auxilio se
+  calcula por DÍAS calendario, no por horas. Hernán laboró 6 días (2 al 7; el 7 con
+  turno doble, que es un solo día), y los días 1 y 8–15 se marcan «No laboró» en
+  el cuadro de turnos → `mensual/30 × 6` = $49.819.
 
 Diferencia DOCUMENTADA: la hoja clasifica el día 7 (viernes 7-ago, Batalla de Boyacá)
 como 7 h ordinarias + 7 h festivas. El motor lo trata entero como festivo, porque el
@@ -24,6 +27,7 @@ from nomina.dominio.servicios.calculadora import liquidar
 from nomina.dominio.servicios.calendario_festivos import CalendarioFestivos
 from nomina.dominio.servicios.clasificador_extras import clasificar_extras
 from nomina.dominio.servicios.segmentador import segmentar_turnos
+from nomina.dominio.valores.novedad_dia import NO_LABORO
 
 PARAMETROS_FECHA = date(2026, 8, 1)
 SALARIO = Decimal(1_750_905)  # salario mínimo 2026, hoja de HERNAN DARIO PALACIO
@@ -49,6 +53,10 @@ def _liquidacion(parametros):
         incluir_auxilio_transporte=True,
         auxilio_prorrateado=True,
         quincena_completa=False,
+        # Ingresó el 2 y no laboró del 8 en adelante.
+        dias_sin_auxilio={
+            date(2026, 8, d): NO_LABORO for d in (1, 8, 9, 10, 11, 12, 13, 14, 15)
+        },
     )
 
 
@@ -77,14 +85,14 @@ def test_tiempo_ordinario_son_las_49_horas_laboradas():
     assert ordinario.valor == Decimal(408_545)
 
 
-def test_auxilio_en_proporcion_a_lo_laborado():
-    """La hoja paga $58.122,17 = 249.095/30 × 7 días = 249.095 × 49 / 210."""
+def test_auxilio_por_dias_laborados():
+    """Por días: 249.095/30 × 6 días = $49.819. La hoja pagó 7 días (49 h ÷ 7 h)."""
     from nomina.semilla import parametros_semilla
 
     liq = _liquidacion(parametros_semilla())
     auxilio = next(c for c in liq.conceptos if c.codigo == "auxilio_transporte")
-    assert auxilio.componentes == {"horas_laboradas": Decimal(49)}
-    assert auxilio.valor == Decimal(58_122)
+    assert auxilio.componentes == {"dias_laborados": Decimal(6), "dias_no_laboro": Decimal(9)}
+    assert auxilio.valor == Decimal(49_819)
 
 
 def test_las_horas_festivas_no_se_pierden():

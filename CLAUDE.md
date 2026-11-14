@@ -127,17 +127,28 @@ dominio  ←  aplicacion  ←  infraestructura
 - **Días no remunerados (número por empleado y quincena):** permiso o licencia sin sueldo.
   Cada día le quita al presupuesto de la quincena una jornada de mes comercial
   (`divisor_hora_ordinaria`/30) —y con él al tiempo ordinario y al IBC— y al auxilio
-  `mensual/30` (el auxilio queda en `15 − N` días y **manda sobre el auxilio prorrateado**,
-  que sobre lo no-extra tiene el mismo problema). Es la marca para permisos de pocos días: «quincena incompleta» paga solo
+  `mensual/30` (el auxilio queda en `15 − N` días, igual que en el auxilio por días).
+  Es la marca para permisos de pocos días: «quincena incompleta» paga solo
   lo no-extra, y con `semanal_legal` eso le quita también descansos remunerados y la parte
   de la semana ya cumplida en la quincena anterior (caso Rigoberto, Río Claro oct-2026:
   70 h = 10 días en vez de 13). Referencia: `tests/dominio/test_dias_no_remunerados.py`.
-- **Auxilio prorrateado (marca por empleado y quincena):** el auxilio de transporte se paga
-  en proporción a lo laborado, `mensual × horas / divisor_hora_ordinaria`, en vez del
-  quincenal plano. Es la cuenta de la contadora (`mensual/30 × días`, con `días = horas /
-  jornada`) reducida a horas. La marca **manda** sobre `incapacitado`/`ocasional`: marcada,
-  el auxilio se paga aunque esos estados lo quiten entero. Con la quincena completa da el
-  mismo valor que el plano. Referencia verificada: `tests/dominio/golden/test_golden_lorena.py`.
+- **Auxilio por días laborados (marca por empleado y quincena):** el auxilio de transporte
+  se paga **por días, no por horas**: `mensual / 30 × días`, con `días = 15 − días
+  marcados (incapacitado / no laboró) − días no remunerados` (tope en 0). Los descansos
+  **sí** cuentan. El 31 no descuenta (la quincena vale 15 días) y en febrero, marcado el
+  último día, la marca cubre hasta el 30 comercial. La marca **manda** sobre
+  `incapacitado`/`ocasional`: marcada, el auxilio se paga aunque esos estados lo quiten
+  entero. Sin días que restar da el quincenal plano. Hasta nov-2026 se calculaba por
+  horas (`mensual × horas / divisor`); el golden de Lorena documenta la diferencia.
+  Referencia: `tests/dominio/test_auxilio_por_dias.py`.
+- **Novedad de día (Incapacitado / No laboró):** en el cuadro de turnos, un día sin turno
+  es **Descanso** por defecto y se puede cambiar a **Incapacitado** o **No laboró** (ingreso
+  o retiro a mitad de quincena, ausencia). Tabla `novedad_dia` (por empleado y fecha). Cada
+  día marcado le quita `mensual/30` al auxilio **aunque la casilla de auxilio por días esté
+  apagada** — marcar el día basta. **No** toca el tiempo ordinario ni el IBC. Un día con
+  turno no se puede marcar (la API lo rechaza y la liquidación ignora la marca si
+  aparece un turno después). Caso que la originó: Torre Laurel, nov-2026, incapacitado
+  los 2 últimos días → 13 días de auxilio.
 - **Día 31 (marca por empleado y quincena):** la quincena 16–fin de mes se paga SIEMPRE
   como 15 días (`horas_quincena` = `divisor_hora_ordinaria`/30 × 15), tenga el mes 30 o 31.
   En los meses de 31, ese día es un 16.º día que el salario no cubre: marcada, sus horas

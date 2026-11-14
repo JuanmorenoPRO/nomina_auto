@@ -31,6 +31,7 @@ from nomina.infraestructura.persistencia.config_unidades import (
 )
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
+    RepositorioNovedadesDiaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -173,6 +174,7 @@ def main() -> None:
             liquidaciones=RepositorioLiquidacionesSQL(session),
             conceptos_manuales=RepositorioConceptosManualesSQL(session),
             ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
+            novedades_dia=RepositorioNovedadesDiaSQL(session),
         )
         for nombre_periodo, periodo in (("1-15", periodo_1), ("16-31", periodo_2)):
             liq = caso.ejecutar(periodo.id, unidad.id)

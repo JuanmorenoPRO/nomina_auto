@@ -163,9 +163,9 @@ def test_incapacitado_sin_auxilio_y_quincena_incompleta_por_horas_trabajadas(cli
 
 
 def test_auxilio_prorrateado_manda_sobre_incapacitado(client):
-    """El empleado se incapacitó a mitad de quincena pero alcanzó a trabajar unas
-    horas: marcar el prorrateo le devuelve el auxilio, proporcional a lo laborado,
-    aunque estar incapacitado normalmente se lo quite entero."""
+    """El empleado se incapacitó a mitad de quincena pero alcanzó a trabajar unos
+    días: marcar «por días laborados» le devuelve el auxilio de los días que no
+    estuvo incapacitado, aunque estar incapacitado normalmente se lo quite entero."""
     unidad = client.post("/unidades", json={"nombre": "Edificio Prorrateo P.H."}).json()
     empleado = client.post(
         "/empleados",
@@ -228,9 +228,79 @@ def test_auxilio_prorrateado_manda_sobre_incapacitado(client):
     auxilio = next(
         c for c in liq2["empleados"][0]["conceptos"] if c["codigo"] == "auxilio_transporte"
     )
-    # 24 h laboradas, divisor 210 (ago-2026): 249.095 × 24 / 210 = 28.468
-    assert auxilio["valor"] == 28_468
-    assert auxilio["componentes"] == {"horas_laboradas": "24"}
+    # Sin días marcados, por días son los 15: el quincenal plano.
+    assert auxilio["valor"] == 124_548
+    assert auxilio["componentes"] == {"dias_laborados": "15"}
+
+    # Incapacitado del 6 al 15: 10 días menos → 249.095 / 30 × 5 = 41.515,8
+    for dia in range(6, 16):
+        r = client.put(
+            "/novedades-dia",
+            json={"empleado_id": empleado["id"], "fecha": f"2026-08-{dia:02d}",
+                  "tipo": "incapacidad"},
+        )
+        assert r.status_code == 204, r.text
+    liq3 = client.post(
+        f"/periodos/{periodo['id']}/liquidar", json={"unidad_id": unidad["id"]}
+    ).json()
+    auxilio = next(
+        c for c in liq3["empleados"][0]["conceptos"] if c["codigo"] == "auxilio_transporte"
+    )
+    assert auxilio["valor"] == 41_516
+    assert auxilio["componentes"] == {"dias_laborados": "5", "dias_incapacidad": "10"}
+
+
+def test_novedades_dia(client):
+    """Marcar / desmarcar un día sin turno, y sus validaciones."""
+    unidad = client.post("/unidades", json={"nombre": "Torre Novedades P.H."}).json()
+    empleado = client.post(
+        "/empleados",
+        json={
+            "unidad_id": unidad["id"],
+            "nombre": "PEDRO NOVEDAD",
+            "documento": "71000999",
+            "cargo": "vigilante",
+            "salario_base": 1_750_905,
+        },
+    ).json()
+    periodo = client.post(
+        "/periodos", json={"fecha_inicio": "2026-11-01", "fecha_fin": "2026-11-15"}
+    ).json()
+    client.post("/turnos", json={"empleado_id": empleado["id"], "fecha": "2026-11-03",
+                                 "hora_inicio": "06:00", "hora_fin": "14:00"})
+    params = {"empleado_id": empleado["id"], "periodo_id": periodo["id"]}
+    marcar = lambda fecha, tipo: client.put(  # noqa: E731
+        "/novedades-dia", json={"empleado_id": empleado["id"], "fecha": fecha, "tipo": tipo}
+    )
+
+    assert client.get("/novedades-dia", params=params).json() == []
+    assert marcar("2026-11-14", "incapacidad").status_code == 204
+    assert marcar("2026-11-15", "no_laboro").status_code == 204
+    eid = empleado["id"]
+    esperado = [
+        {"empleado_id": eid, "fecha": "2026-11-14", "tipo": "incapacidad"},
+        {"empleado_id": eid, "fecha": "2026-11-15", "tipo": "no_laboro"},
+    ]
+    assert client.get("/novedades-dia", params=params).json() == esperado
+    por_unidad = {"unidad_id": unidad["id"], "periodo_id": periodo["id"]}
+    assert client.get("/novedades-dia", params=por_unidad).json() == esperado
+    assert client.get("/novedades-dia", params={"periodo_id": periodo["id"]}).status_code == 400
+    # Cambiar el tipo y volver a descanso.
+    assert marcar("2026-11-15", "incapacidad").status_code == 204
+    assert marcar("2026-11-14", None).status_code == 204
+    assert client.get("/novedades-dia", params=params).json() == [
+        {"empleado_id": eid, "fecha": "2026-11-15", "tipo": "incapacidad"},
+    ]
+
+    # Un día con turno no se puede marcar; un tipo desconocido es 422; sin periodo, error.
+    r = marcar("2026-11-03", "incapacidad")
+    assert r.status_code in (400, 409) and "turnos" in r.json()["detail"]
+    assert marcar("2026-11-04", "vacaciones").status_code == 422
+    assert marcar("2026-12-04", "incapacidad").status_code in (400, 409)
+
+    # Queda en la auditoría.
+    auditoria = client.get("/auditoria").json()
+    assert any(a["entidad"] == "novedad_dia" for a in auditoria)
 
 
 def test_dias_no_remunerados_descuentan_ordinario_y_auxilio(client):
@@ -277,7 +347,10 @@ def test_dias_no_remunerados_descuentan_ordinario_y_auxilio(client):
     assert conceptos["tiempo_ordinario"]["valor"] == 953_333
     # 249.095 × 13/30 = 107.941,2
     assert conceptos["auxilio_transporte"]["valor"] == 107_941
-    assert conceptos["auxilio_transporte"]["componentes"] == {"dias_no_remunerados": "2"}
+    assert conceptos["auxilio_transporte"]["componentes"] == {
+        "dias_laborados": "13",
+        "dias_no_remunerados": "2",
+    }
 
 
 def test_validaciones_de_turnos(client):

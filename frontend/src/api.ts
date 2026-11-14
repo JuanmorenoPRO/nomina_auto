@@ -6,11 +6,13 @@ import type {
   Festivo,
   Incoherencia,
   Liquidacion,
+  NovedadDia,
   Parametro,
   Periodo,
   RegistroAuditoria,
   ReporteImportacion,
   Rol,
+  TipoNovedadDia,
   Turno,
   Unidad,
   Usuario,
@@ -200,6 +202,16 @@ export const api = {
         `/ajustes-quincena?empleado_id=${empleadoId}&periodo_id=${periodoId}`,
         { method: "PUT", body: json(ajuste) },
       ),
+  },
+  novedadesDia: {
+    deUnidad: (periodoId: string, unidadId: string) =>
+      pedir<NovedadDia[]>(`/novedades-dia?periodo_id=${periodoId}&unidad_id=${unidadId}`),
+    /** `tipo: null` devuelve el día a descanso. */
+    marcar: (empleadoId: string, fecha: string, tipo: TipoNovedadDia | null) =>
+      pedir<void>("/novedades-dia", {
+        method: "PUT",
+        body: json({ empleado_id: empleadoId, fecha, tipo }),
+      }),
   },
   parametros: {
     listar: (fecha?: string) =>

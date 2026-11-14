@@ -22,6 +22,7 @@ from nomina.infraestructura.persistencia.config_unidades import (
 )
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
+    RepositorioNovedadesDiaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -105,6 +106,7 @@ def main() -> None:
             liquidaciones=RepositorioLiquidacionesSQL(session),
             conceptos_manuales=RepositorioConceptosManualesSQL(session),
             ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
+            novedades_dia=RepositorioNovedadesDiaSQL(session),
         )
         from uuid import UUID
 

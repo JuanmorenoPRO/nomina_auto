@@ -121,7 +121,7 @@ TURNOS: dict[str, list[TurnoCrudo]] = {
         + _repetir((8,), time(6, 0), time(13, 0), 420)
     ),
     # Ingresó a mitad de quincena: se marca «quincena incompleta» y el auxilio
-    # de transporte se prorratea sobre lo laborado.
+    # de transporte se paga por días laborados.
     "1000000004": _repetir((8, 10, 12, 14), *_NOCHE),
 }
 

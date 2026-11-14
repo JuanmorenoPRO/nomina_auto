@@ -40,6 +40,7 @@ from nomina.infraestructura.persistencia.modelos import (
     FestivoModel,
     LiquidacionEmpleadoModel,
     LiquidacionModel,
+    NovedadDiaModel,
     ParametroLegalModel,
     PeriodoLiquidacionModel,
     TurnoModel,
@@ -407,6 +408,41 @@ class RepositorioConceptosManualesSQL:
                 nombre=m.nombre, valor=Decimal(m.valor), tipo=m.tipo, salarial=m.salarial
             ),
         )
+
+
+@dataclass
+class RepositorioNovedadesDiaSQL:
+    """Novedades (incapacidad / no laboró) de los días sin turno."""
+
+    session: Session
+
+    def de_empleado_entre(self, empleado_id: UUID, desde: date, hasta: date) -> dict[date, str]:
+        filas = self.session.scalars(
+            select(NovedadDiaModel).where(
+                NovedadDiaModel.empleado_id == empleado_id,
+                NovedadDiaModel.fecha >= desde,
+                NovedadDiaModel.fecha <= hasta,
+            )
+        )
+        return {m.fecha: m.tipo for m in filas}
+
+    def marcar(self, empleado_id: UUID, fecha: date, tipo: str | None) -> None:
+        """Fija la novedad del día; `None` la borra (el día vuelve a ser descanso)."""
+        m = self.session.scalar(
+            select(NovedadDiaModel).where(
+                NovedadDiaModel.empleado_id == empleado_id, NovedadDiaModel.fecha == fecha
+            )
+        )
+        if tipo is None:
+            if m is not None:
+                self.session.delete(m)
+        elif m is None:
+            self.session.add(
+                NovedadDiaModel(id=uuid4(), empleado_id=empleado_id, fecha=fecha, tipo=tipo)
+            )
+        else:
+            m.tipo = tipo
+        self.session.flush()
 
 
 @dataclass

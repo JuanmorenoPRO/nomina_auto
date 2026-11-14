@@ -16,6 +16,7 @@ from nomina.dominio.servicios.calculadora import liquidar
 from nomina.dominio.servicios.calendario_festivos import CalendarioFestivos
 from nomina.dominio.servicios.clasificador_extras import clasificar_extras
 from nomina.dominio.servicios.segmentador import segmentar_turnos
+from nomina.dominio.valores.novedad_dia import INCAPACIDAD, NO_LABORO
 from nomina.dominio.valores.tramo import TipoDia
 from nomina.semilla import parametros_semilla
 
@@ -181,18 +182,20 @@ def test_auxilio_de_transporte_quincenal():
     assert valor(liq, "auxilio_transporte") == Decimal(124_548)
 
 
-def test_auxilio_prorrateado_paga_en_proporcion_a_lo_laborado():
-    """El empleado solo alcanzó a trabajar parte de la quincena: el auxilio se paga
-    en proporción a lo laborado, `mensual × horas / horas del mes`."""
+def test_auxilio_prorrateado_paga_por_dias_laborados():
+    """El empleado solo alcanzó a trabajar un día de la quincena (los demás se marcan
+    «No laboró»): el auxilio se paga por días, `mensual / 30 × días`."""
     turnos = [turno("2026-05-04", "06:00", "14:00")]  # lunes, 8 h ordinarias
     tramos = segmentar_turnos(turnos, PARAMETROS, CALENDARIO)
     clasificados = clasificar_extras(tramos, PARAMETROS, date(2026, 5, 1))
+    no_laboro = {date(2026, 5, d): NO_LABORO for d in range(1, 16) if d != 4}
     liq = liquidar(clasificados, SALARIO, PARAMETROS, date(2026, 5, 1),
-                   incluir_auxilio_transporte=True, auxilio_prorrateado=True)
-    # 249.095 × 8 / 220 = 9.058 exactos
-    assert valor(liq, "auxilio_transporte") == Decimal(9_058)
+                   incluir_auxilio_transporte=True, auxilio_prorrateado=True,
+                   dias_sin_auxilio=no_laboro)
+    # 249.095 / 30 × 1 = 8.303,17 → 8.303
+    assert valor(liq, "auxilio_transporte") == Decimal(8_303)
     concepto = next(c for c in liq.conceptos if c.codigo == "auxilio_transporte")
-    assert concepto.componentes == {"horas_laboradas": Decimal(8)}
+    assert concepto.componentes == {"dias_laborados": Decimal(1), "dias_no_laboro": Decimal(14)}
 
 
 def test_auxilio_prorrateado_de_quincena_completa_es_el_quincenal():
@@ -209,14 +212,16 @@ def test_auxilio_prorrateado_de_quincena_completa_es_el_quincenal():
     assert valor(liq, "auxilio_transporte") == Decimal(124_548)
 
 
-def test_auxilio_prorrateado_sin_horas_laboradas_es_cero():
-    """Cero horas: el auxilio es 0, pero la línea se emite igual (con las horas a la
-    vista) para que el cero quede explicado en el reporte."""
+def test_auxilio_prorrateado_sin_dias_laborados_es_cero():
+    """Toda la quincena incapacitada: el auxilio es 0, pero la línea se emite igual
+    (con los días a la vista) para que el cero quede explicado en el reporte."""
+    incapacidad = {date(2026, 5, d): INCAPACIDAD for d in range(1, 16)}
     liq = liquidar([], SALARIO, PARAMETROS, date(2026, 5, 1),
-                   incluir_auxilio_transporte=True, auxilio_prorrateado=True)
+                   incluir_auxilio_transporte=True, auxilio_prorrateado=True,
+                   dias_sin_auxilio=incapacidad)
     assert valor(liq, "auxilio_transporte") == Decimal(0)
     concepto = next(c for c in liq.conceptos if c.codigo == "auxilio_transporte")
-    assert concepto.componentes == {"horas_laboradas": Decimal(0)}
+    assert concepto.componentes == {"dias_laborados": Decimal(0), "dias_incapacidad": Decimal(15)}
 
 
 def test_quincena_incompleta_paga_solo_horas_trabajadas():
