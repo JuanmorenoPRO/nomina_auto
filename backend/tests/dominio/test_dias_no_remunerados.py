@@ -102,12 +102,19 @@ def test_los_dias_mandan_sobre_el_auxilio_prorrateado():
     liq = _liquidar(dias_no_remunerados=2, auxilio_prorrateado=True)
     auxilio = _concepto(liq, "auxilio_transporte")
     assert auxilio.valor == _pesos(AUXILIO_MENSUAL * 13 / 30)
-    assert auxilio.componentes == {"dias_no_remunerados": Decimal(2)}
+    assert auxilio.componentes == {
+        "dias_laborados": Decimal(13),
+        "dias_no_remunerados": Decimal(2),
+    }
 
 
-def test_sin_dias_el_prorrateo_sigue_igual():
+def test_sin_dias_el_prorrateo_paga_los_15_dias():
+    """El prorrateo es por días, no por horas: las 70 h no-extra ya no recortan el
+    auxilio (los descansos y las horas que quedaron como extra son días pagados)."""
     liq = _liquidar(auxilio_prorrateado=True)
-    assert _concepto(liq, "auxilio_transporte").componentes == {"horas_laboradas": Decimal(70)}
+    auxilio = _concepto(liq, "auxilio_transporte")
+    assert auxilio.componentes == {"dias_laborados": Decimal(15)}
+    assert auxilio.valor == _pesos(AUXILIO_MENSUAL / 2)
 
 
 def test_quince_dias_de_permiso_no_pagan_ordinario_ni_auxilio():

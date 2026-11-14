@@ -76,6 +76,16 @@ export interface AjusteQuincena {
   dias_no_remunerados: number;
 }
 
+/** Novedad de un día sin turno (sin novedad = descanso). Le quita ese día al
+ *  auxilio de transporte; no toca el tiempo ordinario. */
+export type TipoNovedadDia = "incapacidad" | "no_laboro";
+
+export interface NovedadDia {
+  empleado_id: string;
+  fecha: string;
+  tipo: TipoNovedadDia;
+}
+
 export interface Periodo {
   id: string;
   fecha_inicio: string;

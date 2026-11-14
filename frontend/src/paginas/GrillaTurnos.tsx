@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Empleado, Festivo, Periodo, Turno, Unidad } from "../tipos";
+import type { Empleado, Festivo, NovedadDia, Periodo, TipoNovedadDia, Turno, Unidad } from "../tipos";
 import {
   DIAS_SEMANA,
   HORAS_JORNADA_ORDINARIA_SUGERIDA,
@@ -19,6 +19,12 @@ import { PreviaTurnosEmpleado } from "./PreviaTurnosEmpleado";
 /** Referencia estable para celdas sin turnos: evita romper la memoización. */
 const SIN_TURNOS: Turno[] = [];
 
+/** Etiqueta corta de la novedad de un día sin turno, para la celda de la grilla. */
+const ETIQUETA_NOVEDAD: Record<TipoNovedadDia, { corta: string; larga: string }> = {
+  incapacidad: { corta: "INC", larga: "Incapacitado: este día no cuenta para el auxilio de transporte" },
+  no_laboro: { corta: "N/L", larga: "No laboró: este día no cuenta para el auxilio de transporte" },
+};
+
 /** Celda con foco/clic: identifica fila (empleado) y columna (día) activas. */
 type CeldaActiva = { fila: number; col: number } | null;
 
@@ -27,6 +33,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
   const [periodoId, setPeriodoId] = useState("");
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [novedades, setNovedades] = useState<NovedadDia[]>([]);
   const [festivos, setFestivos] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [activa, setActiva] = useState<CeldaActiva>(null);
@@ -45,7 +52,12 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
 
   const recargarTurnos = useCallback(async () => {
     if (!periodoId || !unidadId) return;
-    setTurnos(await api.periodos.turnos(periodoId, unidadId));
+    const [nuevosTurnos, nuevasNovedades] = await Promise.all([
+      api.periodos.turnos(periodoId, unidadId),
+      api.novedadesDia.deUnidad(periodoId, unidadId),
+    ]);
+    setTurnos(nuevosTurnos);
+    setNovedades(nuevasNovedades);
   }, [periodoId, unidadId]);
 
   useEffect(() => {
@@ -82,6 +94,12 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
     }
     return mapa;
   }, [turnos]);
+
+  /** Novedad (incapacidad / no laboró) por `empleado|fecha`. */
+  const novedadPorEmpleadoYDia = useMemo(
+    () => new Map(novedades.map((n) => [`${n.empleado_id}|${n.fecha}`, n.tipo])),
+    [novedades],
+  );
 
   const agregarTurno = useCallback(
     async (empleadoId: string, fecha: string, texto: string) => {
@@ -308,6 +326,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
                           esFila={filaActiva}
                           esColumna={activa?.col === col}
                           turnos={porEmpleadoYDia.get(`${emp.id}|${d}`) ?? SIN_TURNOS}
+                          novedad={novedadPorEmpleadoYDia.get(`${emp.id}|${d}`) ?? null}
                           soloLectura={soloLectura}
                           alActivar={activar}
                           alAgregar={agregarTurno}
@@ -345,6 +364,7 @@ export function GrillaTurnos({ unidades, periodos }: { unidades: Unidad[]; perio
               dias={dias}
               festivos={festivos}
               turnos={turnos.filter((t) => t.empleado_id === empleadoPrevia.id)}
+              novedades={novedades.filter((n) => n.empleado_id === empleadoPrevia.id)}
               soloLectura={soloLectura}
               alCerrar={() => setEmpleadoPrevia(null)}
               alGuardado={recargarTurnos}
@@ -366,6 +386,7 @@ type CeldaTurnoProps = {
   esFila: boolean;
   esColumna: boolean;
   turnos: Turno[];
+  novedad: TipoNovedadDia | null;
   soloLectura: boolean;
   alActivar: (fila: number, col: number) => void;
   alAgregar: (empleadoId: string, fecha: string, texto: string) => void;
@@ -386,6 +407,7 @@ const CeldaTurno = memo(function CeldaTurno({
   esFila,
   esColumna,
   turnos,
+  novedad,
   soloLectura,
   alActivar,
   alAgregar,
@@ -407,6 +429,12 @@ const CeldaTurno = memo(function CeldaTurno({
       onFocus={() => alActivar(fila, col)}
       onClick={() => alActivar(fila, col)}
     >
+      {/* La novedad se edita en la tarjeta; aquí solo se ve. Con turno no aplica. */}
+      {novedad && turnos.length === 0 && (
+        <span className={`marca-novedad ${novedad}`} title={ETIQUETA_NOVEDAD[novedad].larga}>
+          {ETIQUETA_NOVEDAD[novedad].corta}
+        </span>
+      )}
       {turnos.map((t) => (
         <span
           key={t.id}

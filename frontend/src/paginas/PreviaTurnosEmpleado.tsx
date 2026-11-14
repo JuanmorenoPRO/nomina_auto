@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { ImportarTurnos } from "./ImportarTurnos";
-import type { Empleado, Periodo, Turno, Unidad } from "../tipos";
+import type { Empleado, NovedadDia, Periodo, TipoNovedadDia, Turno, Unidad } from "../tipos";
 import {
   DIAS_SEMANA,
   HORAS_JORNADA_ORDINARIA_SUGERIDA,
@@ -56,21 +56,49 @@ const ESTADOS_EMPLEADO = [
   {
     campo: "incapacitado",
     etiqueta: "Incapacitado",
-    titulo: "Incapacitado: sin auxilio de transporte, salvo que se prorratee por lo laborado.",
+    titulo:
+      "Incapacitado toda la quincena: sin auxilio de transporte. Si solo fueron algunos " +
+      "días, márquelos como «Incapacitado» en la columna Descanso.",
   },
   {
     campo: "ocasional",
     etiqueta: "Ocasional",
-    titulo: "Ocasional: sin auxilio de transporte, salvo que se prorratee por lo laborado.",
+    titulo: "Ocasional: sin auxilio de transporte, salvo que se pague por días laborados.",
   },
 ] as const;
 
 type CampoEstado = (typeof ESTADOS_EMPLEADO)[number]["campo"];
 
 const TITULO_AUXILIO_POR_DIAS =
-  "El auxilio de transporte se paga en proporción a las horas laboradas de la quincena " +
-  "(auxilio mensual × horas ÷ horas del mes), en vez del auxilio quincenal completo. " +
-  "Marcado, se paga aunque el empleado esté incapacitado u ocasional.";
+  "El auxilio de transporte se paga por días: auxilio mensual ÷ 30 × días laborados, " +
+  "donde los días laborados son los 15 de la quincena menos los marcados como " +
+  "«Incapacitado» o «No laboró» en la columna Descanso y los días no remunerados. " +
+  "Los descansos sí cuentan. Marcado, se paga aunque el empleado esté incapacitado " +
+  "u ocasional. Los días marcados descuentan el auxilio aunque esta casilla esté apagada.";
+
+const TITULO_NOVEDAD =
+  "Día sin turno: «Descanso» cuenta para el auxilio de transporte; «Incapacitado» y " +
+  "«No laboró» (ingreso o retiro a mitad de quincena, ausencia) no cuentan. " +
+  "No cambia el tiempo ordinario.";
+
+const OPCIONES_NOVEDAD: { valor: TipoNovedadDia | ""; etiqueta: string }[] = [
+  { valor: "", etiqueta: "Descanso" },
+  { valor: "incapacidad", etiqueta: "Incapacitado" },
+  { valor: "no_laboro", etiqueta: "No laboró" },
+];
+
+/** Días de la quincena que no generan auxilio, con la misma regla del backend
+ *  (`_dias_marcados_por_tipo`): el 31 no cuenta, y en un mes de menos de 30 días,
+ *  marcado el último día, la marca cubre hasta el 30 comercial. */
+function diasMarcadosParaAuxilio(dias: string[], marcados: Set<string>): number {
+  let total = 0;
+  for (const d of dias) if (marcados.has(d) && !d.endsWith("-31")) total += 1;
+  const ultimo = dias[dias.length - 1];
+  if (ultimo && Number(ultimo.slice(8)) < 30 && Number(dias[0].slice(8)) > 15 && marcados.has(ultimo)) {
+    total += 30 - Number(ultimo.slice(8));
+  }
+  return total;
+}
 
 const TITULO_PAGAR_DIA_31 =
   "La quincena se paga siempre como 15 días, así que en los meses de 31 ese día " +
@@ -130,6 +158,7 @@ export function PreviaTurnosEmpleado({
   dias,
   festivos,
   turnos,
+  novedades,
   soloLectura,
   alCerrar,
   alGuardado,
@@ -141,6 +170,8 @@ export function PreviaTurnosEmpleado({
   dias: string[];
   festivos: Set<string>;
   turnos: Turno[];
+  /** Novedades (incapacitado / no laboró) de los días sin turno del empleado. */
+  novedades: NovedadDia[];
   soloLectura: boolean;
   alCerrar: () => void;
   alGuardado: () => void;
@@ -171,6 +202,11 @@ export function PreviaTurnosEmpleado({
   const [guardandoDiasNoRemunerados, setGuardandoDiasNoRemunerados] = useState(false);
   const [guardandoEstado, setGuardandoEstado] = useState<CampoEstado | null>(null);
   const [importando, setImportando] = useState(false);
+  // Se guardan al cambiar el selector, como las casillas del panel.
+  const [novedadPorDia, setNovedadPorDia] = useState<Record<string, TipoNovedadDia>>(() =>
+    Object.fromEntries(novedades.map((n) => [n.fecha, n.tipo])),
+  );
+  const [guardandoNovedad, setGuardandoNovedad] = useState<string | null>(null);
 
   useEffect(() => {
     api.ajustesQuincena
@@ -199,6 +235,26 @@ export function PreviaTurnosEmpleado({
       setError((err as Error).message);
     } finally {
       setGuardandoEstado(null);
+    }
+  }
+
+  /** Descanso (null) / Incapacitado / No laboró de un día sin turno. */
+  async function marcarNovedad(dia: string, tipo: TipoNovedadDia | null) {
+    setError("");
+    setGuardandoNovedad(dia);
+    try {
+      await api.novedadesDia.marcar(empleado.id, dia, tipo);
+      setNovedadPorDia((prev) => {
+        const copia = { ...prev };
+        if (tipo === null) delete copia[dia];
+        else copia[dia] = tipo;
+        return copia;
+      });
+      alGuardado();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardandoNovedad(null);
     }
   }
 
@@ -442,6 +498,18 @@ export function PreviaTurnosEmpleado({
   );
 
 
+  /** Días que no generan auxilio: los marcados que siguen sin horas en la tarjeta. */
+  const diasMarcados = useMemo(() => {
+    const marcados = new Set(
+      Object.keys(novedadPorDia).filter((d) =>
+        (pares[d] ?? []).every((p) => !p.inicio.trim() && !p.fin.trim()),
+      ),
+    );
+    return diasMarcadosParaAuxilio(dias, marcados);
+  }, [novedadPorDia, pares, dias]);
+  const diasAuxilio = Math.max(0, 15 - diasMarcados - diasNoRemuneradosGuardados);
+  const sinAuxilioPorEstado = !auxilioPorDias && (empleado.incapacitado || empleado.ocasional);
+
   /** Tras importar, el borrador local de esta tarjeta quedó viejo: si no se
    *  vuelve a leer del servidor, «Guardar cambios» desharía la importación. */
   async function releerTrasImportar() {
@@ -486,8 +554,15 @@ export function PreviaTurnosEmpleado({
     const aBorrar = turnos.filter((t) => !clavesEditadas.has(claveTurno(t)));
     const aCrear = editados.filter((e) => !clavesOriginales.has(clave(e.fecha, e.inicio, e.fin)));
 
+    // Un día con turno no puede seguir marcado como incapacitado / no laboró: el
+    // backend no deja registrar la marca en un día trabajado, así que se quita.
+    const marcasAQuitar = [...new Set(editados.map((e) => e.fecha))].filter(
+      (d) => novedadPorDia[d] !== undefined,
+    );
+
     setGuardando(true);
     try {
+      for (const d of marcasAQuitar) await api.novedadesDia.marcar(empleado.id, d, null);
       // Borrar antes de crear evita falsos solapes con el turno que se reemplaza.
       for (const t of aBorrar) await api.turnos.eliminar(t.id);
       for (const e of aCrear) {
@@ -604,8 +679,14 @@ export function PreviaTurnosEmpleado({
                   const filaPares = pares[d] ?? [];
                   const min = minutosDia(d);
                   const descanso = filaPares.every((p) => !p.inicio.trim() && !p.fin.trim());
+                  const novedad = descanso ? novedadPorDia[d] : undefined;
+                  const claseFila = novedad
+                    ? `novedad-${novedad}`
+                    : esFestivo || esDomingo
+                      ? "dia-descanso"
+                      : "";
                   return (
-                    <tr key={d} className={esFestivo || esDomingo ? "dia-descanso" : ""}>
+                    <tr key={d} className={claseFila}>
                       <td>
                         {DIAS_SEMANA[fecha.getDay()]}
                         {esFestivo ? " ✦" : ""}
@@ -698,7 +779,29 @@ export function PreviaTurnosEmpleado({
                       </td>
                       <td className="total">{min > 0 ? (min / 60).toFixed(1) : ""}</td>
                       <td className="celda-descanso">
-                        {descanso && <span className="atenuado">Descanso</span>}
+                        {descanso &&
+                          (soloLectura ? (
+                            <span className={novedad ? "" : "atenuado"}>
+                              {OPCIONES_NOVEDAD.find((o) => o.valor === (novedad ?? ""))?.etiqueta}
+                            </span>
+                          ) : (
+                            <select
+                              className="selector-novedad"
+                              title={TITULO_NOVEDAD}
+                              aria-label={`Novedad del ${d}`}
+                              value={novedad ?? ""}
+                              disabled={guardandoNovedad !== null}
+                              onChange={(e) =>
+                                marcarNovedad(d, (e.target.value || null) as TipoNovedadDia | null)
+                              }
+                            >
+                              {OPCIONES_NOVEDAD.map((o) => (
+                                <option key={o.valor} value={o.valor}>
+                                  {o.etiqueta}
+                                </option>
+                              ))}
+                            </select>
+                          ))}
                         {!soloLectura && (
                           <button
                             type="button"
@@ -802,7 +905,7 @@ export function PreviaTurnosEmpleado({
                   disabled={soloLectura || guardandoAuxilio}
                   onChange={(e) => marcarAuxilioPorDias(e.target.checked)}
                 />
-                Prorratear con lo laborado
+                Por días laborados
               </label>
               <label className="casilla" title={TITULO_NO_DEVENGAR_AUXILIO}>
                 <input
@@ -813,11 +916,17 @@ export function PreviaTurnosEmpleado({
                 />
                 No devengar esta quincena
               </label>
-              {auxilioPorDias && diasNoRemuneradosGuardados > 0 && (
+              {!noDevengarAuxilio && !sinAuxilioPorEstado && (
+                <p className="dias-auxilio">
+                  Días de auxilio: <b>{diasAuxilio}</b> de 15
+                  {diasMarcados + diasNoRemuneradosGuardados > 0 && " (descontados incapacitados, no laborados y no remunerados)"}
+                </p>
+              )}
+              {sinAuxilioPorEstado && !noDevengarAuxilio && (
                 <p className="aviso-advertencia">
-                  ⚠ Con días no remunerados el auxilio se paga por días (
-                  {15 - diasNoRemuneradosGuardados} de 15), no con lo laborado: el
-                  prorrateo no aplica.
+                  ⚠ El empleado está {empleado.incapacitado ? "incapacitado" : "ocasional"}:
+                  no se paga auxilio. Marque &ldquo;Por días laborados&rdquo; para pagar los
+                  días que sí trabajó.
                 </p>
               )}
               {auxilioPorDias && noDevengarAuxilio && (

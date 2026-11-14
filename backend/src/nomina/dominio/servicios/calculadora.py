@@ -22,6 +22,7 @@ una sola vez, al final, por concepto, a pesos enteros con ROUND_HALF_UP.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import calendar
 from datetime import date
@@ -34,6 +35,7 @@ from nomina.dominio.entidades.concepto_liquidado import (
     Liquidacion,
 )
 from nomina.dominio.puertos.parametros import ProveedorParametros
+from nomina.dominio.valores.novedad_dia import INCAPACIDAD, NO_LABORO, TIPOS_NOVEDAD_DIA
 from nomina.dominio.valores.tiempo import MINUTOS_POR_HORA
 from nomina.dominio.valores.tramo import Franja, TipoDia, Tramo
 
@@ -118,6 +120,33 @@ def _dia_31_del_mes(fecha_periodo: date) -> date | None:
     return date(fecha_periodo.year, fecha_periodo.month, 31)
 
 
+def _dias_marcados_por_tipo(
+    dias_sin_auxilio: Mapping[date, str], fecha_periodo: date
+) -> dict[str, int]:
+    """Días marcados (incapacidad / no laboró) que le quitan días al auxilio.
+
+    La quincena vale siempre 15 días de mes comercial, así que:
+
+    - El 31 no cuenta: ese día no se paga en el auxilio, marcarlo no le quita nada.
+    - En la segunda quincena de un mes de menos de 30 días (febrero), si el último
+      día del mes está marcado, la marca cubre también los días comerciales que
+      faltan hasta el 30. Así una quincena 16–28 entera incapacitada da 0 días y no
+      2, igual que la de un mes de 30.
+    """
+    por_tipo = {INCAPACIDAD: 0, NO_LABORO: 0}
+    for fecha, tipo in dias_sin_auxilio.items():
+        if tipo not in TIPOS_NOVEDAD_DIA:
+            raise ValueError(f"Novedad de día desconocida: {tipo!r}")
+        if fecha.day == 31:
+            continue
+        por_tipo[tipo] += 1
+    ultimo = calendar.monthrange(fecha_periodo.year, fecha_periodo.month)[1]
+    fin_de_mes = date(fecha_periodo.year, fecha_periodo.month, ultimo)
+    if fecha_periodo.day > 15 and ultimo < DIAS_MES_COMERCIAL and fin_de_mes in dias_sin_auxilio:
+        por_tipo[dias_sin_auxilio[fin_de_mes]] += DIAS_MES_COMERCIAL - ultimo
+    return por_tipo
+
+
 def _redondear_pesos(valor: Decimal) -> Decimal:
     return valor.quantize(_UN_PESO, rounding=ROUND_HALF_UP)
 
@@ -135,6 +164,7 @@ def liquidar(
     quincena_completa: bool = True,
     pagar_dia_31: bool = False,
     dias_no_remunerados: int = 0,
+    dias_sin_auxilio: Mapping[date, str] | None = None,
 ) -> Liquidacion:
     """Liquida la quincena de un empleado a partir de sus tramos ya clasificados.
 
@@ -148,12 +178,16 @@ def liquidar(
     se generan las deducciones de salud y pensión sobre el IBC (devengados
     salariales, sin auxilio de transporte).
 
-    `auxilio_prorrateado` (default `False`): con `False` el auxilio de transporte es
-    el quincenal plano (mensual / 2), se haya trabajado la quincena entera o un día.
-    Con `True` se paga en proporción a lo laborado: `mensual × horas / divisor`, donde
-    el divisor son las horas del mes, igual que el auxilio son los pesos del mes.
-    Es la cuenta de la contadora (`mensual/30 × días`, con `días = horas / jornada`)
-    reducida a horas, y con la quincena completa da el quincenal plano.
+    `auxilio_prorrateado` (default `False`): con `True` el auxilio de transporte se
+    paga POR DÍAS: `mensual / 30 × días pagados`, con `días pagados = 15 − días no
+    remunerados − días marcados en `dias_sin_auxilio``. Los descansos cuentan como
+    días pagados. Sin días que restar da el quincenal plano (mensual / 2).
+
+    `dias_sin_auxilio` (fecha → `incapacidad` | `no_laboro`): días sin turno marcados
+    en el cuadro de turnos. Cada uno le quita `mensual / 30` al auxilio aunque
+    `auxilio_prorrateado` esté apagado — marcar el día basta, para no pagar de más
+    por olvidar la casilla. No tocan el tiempo ordinario ni el IBC. El 31 no
+    cuenta (ver `_dias_marcados_por_tipo`).
 
     `quincena_completa` (default `True`): el salario cubre el tope legal completo
     de horas ordinarias sin importar cuánto sumen los tramos (así lo hace la
@@ -175,11 +209,10 @@ def liquidar(
     (`mensual/30` por día). A diferencia de `quincena_completa=False`, no depende de
     cuántas horas quedaron como extra: los descansos remunerados y las horas que la
     estrategia semanal convirtió en extra siguen cubiertos por el salario. Con días
-    no remunerados el auxilio son los días pagados aunque `auxilio_prorrateado` esté
-    marcado: el prorrateo sobre lo no-extra tiene el mismo problema.
+    no remunerados el auxilio se paga por días (15 − N), como con `auxilio_prorrateado`.
 
-    Las marcas comparten la base de «lo laborado»: todo lo trabajado que no sea extra,
-    topado al presupuesto legal. Ver el comentario en el cuerpo.
+    `quincena_incompleta` usa la base de «lo laborado»: todo lo trabajado que no sea
+    extra, topado al presupuesto legal. Ver el comentario en el cuerpo.
     """
     override = factores_override or {}
     _dia_31 = _dia_31_del_mes(fecha_periodo)
@@ -211,8 +244,8 @@ def liquidar(
         )
     minutos_quincena_legal = minutos_presupuesto - int(dias_no_remunerados * minutos_dia_comercial)
 
-    # Base de «lo laborado», compartida por el tiempo ordinario prorrateado y por el
-    # auxilio: TODO lo trabajado que no sea extra, topado al presupuesto legal.
+    # Base de «lo laborado» del tiempo ordinario prorrateado: TODO lo trabajado que
+    # no sea extra, topado al presupuesto legal.
     #
     # Las horas festivas y nocturnas entran aquí igual que las ordinarias, porque en
     # la quincena completa también están dentro del presupuesto (la planilla de la
@@ -251,10 +284,8 @@ def liquidar(
         else 0
     )
 
-    # El auxilio prorratea sobre TODO lo laborado: el 31 es un día trabajado como
-    # cualquier otro. El tiempo ordinario, en cambio, descuenta las horas del 31,
-    # que se pagan en su propia línea: contarlas aquí las pagaría dos veces.
-    minutos_base_auxilio = min(minutos_no_extra, minutos_quincena_legal)
+    # El tiempo ordinario descuenta las horas del 31, que se pagan en su propia
+    # línea: contarlas aquí las pagaría dos veces.
     minutos_base_ordinario = min(minutos_no_extra - minutos_dia_31, minutos_quincena_legal)
 
     # Alarma: horas trabajadas no-extra que ni el presupuesto ni el día 31 cubren.
@@ -322,27 +353,28 @@ def liquidar(
 
     if incluir_auxilio_transporte:
         mensual = parametros.auxilio_transporte_mensual(fecha_periodo)
-        componentes_auxilio: dict[str, Decimal]
-        if dias_no_remunerados:
-            # Los días mandan sobre el prorrateo: el auxilio son los días pagados de la
-            # quincena (15 − N) de mes comercial. Prorratear sobre lo no-extra repetiría
-            # el error de la quincena incompleta: con muchas extras se come los descansos.
-            dias_pagados = (
-                minutos_presupuesto / minutos_dia_comercial - dias_no_remunerados
+        marcados = _dias_marcados_por_tipo(dias_sin_auxilio or {}, fecha_periodo)
+        componentes_auxilio: dict[str, Decimal] = {}
+        if auxilio_prorrateado or dias_no_remunerados or any(marcados.values()):
+            # Por días de mes comercial: la quincena vale 15 (derivado de los
+            # parámetros, no quemado) y se restan los días que no generan auxilio.
+            # Los descansos sí cuentan: son días remunerados.
+            dias_quincena = minutos_presupuesto / minutos_dia_comercial
+            dias_pagados = max(
+                Decimal(0),
+                dias_quincena - dias_no_remunerados - sum(marcados.values()),
             )
             auxilio = mensual * dias_pagados / DIAS_MES_COMERCIAL
-            componentes_auxilio = {"dias_no_remunerados": Decimal(dias_no_remunerados)}
-        elif not auxilio_prorrateado:
-            auxilio = mensual / 2
-            componentes_auxilio = {}
+            componentes_auxilio["dias_laborados"] = dias_pagados
+            for clave, valor in (
+                ("dias_incapacidad", marcados[INCAPACIDAD]),
+                ("dias_no_laboro", marcados[NO_LABORO]),
+                ("dias_no_remunerados", dias_no_remunerados),
+            ):
+                if valor:
+                    componentes_auxilio[clave] = Decimal(valor)
         else:
-            # Proporción de lo laborado: pesos del mes × horas / horas del mes.
-            # Se prorratea aunque la quincena se liquide completa — son dos marcas
-            # independientes. `componentes` deja las horas a la vista en el reporte,
-            # que si no sería un valor sin explicación.
-            horas_base = Decimal(minutos_base_auxilio) / MINUTOS_POR_HORA
-            auxilio = mensual * horas_base / parametros.divisor_hora_ordinaria(fecha_periodo)
-            componentes_auxilio = {"horas_laboradas": horas_base}
+            auxilio = mensual / 2
         conceptos.append(
             ConceptoLiquidado(
                 codigo="auxilio_transporte",

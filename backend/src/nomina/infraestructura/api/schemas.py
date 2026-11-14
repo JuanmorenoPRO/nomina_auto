@@ -7,6 +7,7 @@ Las reglas de negocio (solapamientos, periodos abiertos) viven en los casos de u
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -138,6 +139,21 @@ class AjusteQuincenaRespuesta(BaseModel):
     no_devengar_auxilio: bool
     no_descontar_seguridad_social: bool
     dias_no_remunerados: int
+
+
+class NovedadDia(BaseModel):
+    """Novedad de un día sin turno: `incapacidad` o `no_laboro` (sin novedad = descanso)."""
+
+    empleado_id: UUID
+    fecha: date
+    tipo: Literal["incapacidad", "no_laboro"]
+
+
+class NovedadDiaMarcar(BaseModel):
+    empleado_id: UUID
+    fecha: date
+    # null = quitar la marca: el día vuelve a ser descanso.
+    tipo: Literal["incapacidad", "no_laboro"] | None
 
 
 class PeriodoCrear(BaseModel):

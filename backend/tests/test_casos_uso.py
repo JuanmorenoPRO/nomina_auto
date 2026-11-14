@@ -1,5 +1,6 @@
 """Casos de uso contra la BD (SQLite en memoria)."""
 
+from dataclasses import replace
 from datetime import date, time
 from decimal import Decimal
 from uuid import uuid4
@@ -14,8 +15,10 @@ from nomina.aplicacion.errores import NoEncontradoError, ReglaDeNegocioError
 from nomina.dominio.entidades.empleado import Empleado
 from nomina.dominio.entidades.periodo_liquidacion import EstadoPeriodo, PeriodoLiquidacion
 from nomina.dominio.entidades.unidad_residencial import ConfiguracionUnidad, UnidadResidencial
+from nomina.dominio.valores.novedad_dia import INCAPACIDAD
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
+    RepositorioNovedadesDiaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -68,6 +71,7 @@ def _liquidar(session) -> LiquidarQuincena:
         liquidaciones=RepositorioLiquidacionesSQL(session),
         conceptos_manuales=RepositorioConceptosManualesSQL(session),
         ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
+        novedades_dia=RepositorioNovedadesDiaSQL(session),
     )
 
 
@@ -144,27 +148,69 @@ def test_sin_extras_fuerza_presupuesto_quincenal(session, contexto):
     assert not any(c.codigo.startswith("extra") for c in conceptos)
 
 
-def test_auxilio_prorrateado_usa_las_horas_laboradas(session, contexto):
-    """Dos nocturnos de 12 h que cruzan medianoche: 24 h laboradas.
+def test_auxilio_descuenta_los_dias_incapacitados(session, contexto):
+    """Caso Torre Laurel: incapacitado los 2 últimos días de la quincena 16–30.
 
-    El prorrateo va sobre las HORAS, así que da igual cómo se repartan los tramos a
-    uno y otro lado de la medianoche — lo que antes era la trampa de contar fechas."""
+    El auxilio es por días: 15 − 2 = 13 días, aunque la casilla «por días laborados»
+    no esté marcada (marcar el día basta). Los descansos sí cuentan."""
     unidad, empleado, periodo = contexto
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 20), time(18), time(6))
     _registrar(session).ejecutar(empleado.id, date(2026, 6, 21), time(18), time(6))
+    novedades = RepositorioNovedadesDiaSQL(session)
+    novedades.marcar(empleado.id, date(2026, 6, 29), INCAPACIDAD)
+    novedades.marcar(empleado.id, date(2026, 6, 30), INCAPACIDAD)
 
-    RepositorioAjustesQuincenaSQL(session).marcar(
-        empleado.id, periodo.id, auxilio_por_dias_laborados=True
-    )
     liquidacion = _liquidar(session).ejecutar(periodo.id, unidad.id)
     auxilio = next(
         c
         for c in liquidacion.por_empleado[0].liquidacion.conceptos
         if c.codigo == "auxilio_transporte"
     )
-    assert auxilio.componentes == {"horas_laboradas": Decimal(24)}
-    # 249.095 × 24 / 220 (divisor de jun-2026) = 27.174,0 → 27.174
-    assert auxilio.valor == Decimal(27_174)
+    assert auxilio.componentes == {"dias_laborados": Decimal(13), "dias_incapacidad": Decimal(2)}
+    # 249.095 / 30 × 13 = 107.941,2 → 107.941
+    assert auxilio.valor == Decimal(107_941)
+
+
+def test_marca_en_dia_con_turno_se_ignora(session, contexto):
+    """Defensivo: si un día tiene turno y además marca, el turno manda (se trabajó)."""
+    unidad, empleado, periodo = contexto
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 20), time(6), time(14))
+    RepositorioNovedadesDiaSQL(session).marcar(empleado.id, date(2026, 6, 20), INCAPACIDAD)
+
+    liquidacion = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    auxilio = next(
+        c
+        for c in liquidacion.por_empleado[0].liquidacion.conceptos
+        if c.codigo == "auxilio_transporte"
+    )
+    assert auxilio.componentes == {}
+    assert auxilio.valor == Decimal(124_548)
+
+
+def test_incapacitado_con_casilla_paga_solo_los_dias_no_marcados(session, contexto):
+    unidad, empleado, periodo = contexto
+    RepositorioEmpleadosSQL(session).guardar(replace(empleado, incapacitado=True))
+    _registrar(session).ejecutar(empleado.id, date(2026, 6, 17), time(6), time(14))
+    novedades = RepositorioNovedadesDiaSQL(session)
+    for dia in range(18, 31):
+        novedades.marcar(empleado.id, date(2026, 6, dia), INCAPACIDAD)
+
+    sin_casilla = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    assert "auxilio_transporte" not in {
+        c.codigo for c in sin_casilla.por_empleado[0].liquidacion.conceptos
+    }
+
+    RepositorioAjustesQuincenaSQL(session).marcar(
+        empleado.id, periodo.id, auxilio_por_dias_laborados=True
+    )
+    con_casilla = _liquidar(session).ejecutar(periodo.id, unidad.id)
+    auxilio = next(
+        c
+        for c in con_casilla.por_empleado[0].liquidacion.conceptos
+        if c.codigo == "auxilio_transporte"
+    )
+    # 16 y 17: 2 días · 249.095 / 30 × 2 = 16.606,3
+    assert auxilio.valor == Decimal(16_606)
 
 
 def test_reliquidar_reemplaza_y_solo_conserva_la_ultima(session, contexto):

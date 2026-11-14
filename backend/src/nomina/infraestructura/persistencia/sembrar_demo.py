@@ -41,6 +41,7 @@ from nomina.dominio.entidades.usuario import Rol
 from nomina.infraestructura.persistencia.modelos import UsuarioModel
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
+    RepositorioNovedadesDiaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -272,6 +273,7 @@ def main() -> None:
             liquidaciones=RepositorioLiquidacionesSQL(session),
             conceptos_manuales=RepositorioConceptosManualesSQL(session),
             ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
+            novedades_dia=RepositorioNovedadesDiaSQL(session),
         )
         _historial(session, caso, unidad)
         liq = caso.ejecutar(periodo.id, unidad.id)

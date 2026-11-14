@@ -87,6 +87,21 @@ class TurnoModel(Base):
     minutos_jornada_ordinaria: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class NovedadDiaModel(Base):
+    """Novedad de un día sin turno del cuadro de turnos: `incapacidad` o
+    `no_laboro`. Sin fila = descanso. Le quita ese día al auxilio de transporte
+    (ver `dominio/valores/novedad_dia.py`). Va por fecha, no por periodo: un día
+    pertenece a una sola quincena."""
+
+    __tablename__ = "novedad_dia"
+    __table_args__ = (UniqueConstraint("empleado_id", "fecha"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    empleado_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("empleado.id"), index=True)
+    fecha: Mapped[date] = mapped_column(Date, index=True)
+    tipo: Mapped[str] = mapped_column(String(12))
+
+
 class ParametroLegalModel(Base):
     __tablename__ = "parametro_legal"
 
@@ -232,9 +247,9 @@ class AjusteQuincenaModel(Base):
       no superó el presupuesto quincenal → no se le cobran horas extra por turno.
       Fuerza la estrategia `presupuesto_quincenal` (extra solo sobre el excedente
       de las horas de la quincena); los recargos nocturno/dominical se mantienen.
-    - `auxilio_por_dias_laborados`: el auxilio de transporte se prorratea sobre los
-      días con turno de la quincena en vez de pagarse quincenal plano. Manda sobre
-      `incapacitado`/`ocasional`: marcado, el auxilio se paga (prorrateado) aunque
+    - `auxilio_por_dias_laborados`: el auxilio de transporte se paga por días
+      (`mensual/30 × (15 − días incapacitados / no laborados / no remunerados)`).
+      Manda sobre `incapacitado`/`ocasional`: marcado, el auxilio se paga aunque
       esos estados normalmente lo quiten por completo.
     - `pagar_dia_31`: la quincena se paga siempre como 15 días; en los meses de 31
       días, marcado, las horas no-extra del 31 se reconocen aparte a hora base.

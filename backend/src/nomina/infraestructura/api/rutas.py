@@ -27,6 +27,7 @@ from nomina.aplicacion.casos_uso.importar_turnos import (
     ReporteImportacion,
 )
 from nomina.aplicacion.casos_uso.liquidar_quincena import LiquidarQuincena
+from nomina.aplicacion.casos_uso.marcar_novedad_dia import MarcarNovedadDia
 from nomina.aplicacion.casos_uso.marcar_periodo_liquidado import MarcarPeriodoLiquidado
 from nomina.aplicacion.casos_uso.registrar_turno import RegistrarTurno
 from nomina.dominio.entidades.concepto_liquidado import (
@@ -54,6 +55,7 @@ from nomina.infraestructura.excel.plantilla_turnos import (
 from nomina.infraestructura.persistencia.base import sesion
 from nomina.infraestructura.persistencia.repositorios import (
     RepositorioAjustesQuincenaSQL,
+    RepositorioNovedadesDiaSQL,
     RepositorioConceptosManualesSQL,
     RepositorioEmpleadosSQL,
     RepositorioFestivosSQL,
@@ -385,8 +387,8 @@ def obtener_ajuste_quincena(
     """Marcas del empleado en esta quincena (desde el cuadro de turnos):
     `quincena_incompleta` (liquidar sobre lo trabajado), `sin_extras` (no cobrar
     extra por turno; solo sobre el excedente del presupuesto quincenal),
-    `auxilio_por_dias_laborados` (prorratear el auxilio de transporte sobre los
-    días con turno en vez de pagar el quincenal plano), `pagar_dia_31` (reconocer
+    `auxilio_por_dias_laborados` (pagar el auxilio de transporte por días: 15 menos
+    los días incapacitados / no laborados / no remunerados), `pagar_dia_31` (reconocer
     aparte las horas del día 31, que el presupuesto de 15 días no cubre),
     `no_devengar_auxilio` y `no_descontar_seguridad_social` (excepciones contables
     puntuales: no pagar el auxilio o no descontar salud/pensión esa quincena) y
@@ -452,6 +454,57 @@ def marcar_ajuste_quincena(
         no_devengar_auxilio=no_auxilio, no_descontar_seguridad_social=no_seg_social,
         dias_no_remunerados=dias_no_remunerados,
     )
+
+
+@router.get("/novedades-dia", response_model=list[schemas.NovedadDia])
+def listar_novedades_dia(
+    periodo_id: UUID,
+    usuario: UsuarioOperador,
+    session: Sesion,
+    empleado_id: UUID | None = None,
+    unidad_id: UUID | None = None,
+):
+    """Días sin turno marcados como `incapacidad` o `no_laboro` en la quincena, de
+    un empleado (`empleado_id`) o de los empleados activos de una unidad
+    (`unidad_id`). Los días que no aparecen son descansos. Cada uno le quita un día
+    (`mensual/30`) al auxilio de transporte."""
+    periodo = RepositorioPeriodosSQL(session).obtener(periodo_id)
+    if periodo is None:
+        raise HTTPException(404, "No existe el periodo")
+    if empleado_id is not None:
+        ids = [empleado_id]
+    elif unidad_id is not None:
+        ids = [
+            e.id
+            for e in RepositorioEmpleadosSQL(session).listar(unidad_id=unidad_id, solo_activos=True)
+        ]
+    else:
+        raise HTTPException(400, "Indique empleado_id o unidad_id")
+    repo = RepositorioNovedadesDiaSQL(session)
+    return [
+        schemas.NovedadDia(empleado_id=eid, fecha=f, tipo=t)
+        for eid in ids
+        for f, t in sorted(
+            repo.de_empleado_entre(eid, periodo.fecha_inicio, periodo.fecha_fin).items()
+        )
+    ]
+
+
+@router.put("/novedades-dia", status_code=204)
+def marcar_novedad_dia(datos: schemas.NovedadDiaMarcar, usuario: UsuarioOperador, session: Sesion):
+    """Marca un día sin turno como `incapacidad` / `no_laboro`, o lo devuelve a
+    descanso con `tipo: null`. El periodo debe estar abierto y el día sin turnos."""
+    repo = RepositorioNovedadesDiaSQL(session)
+    antes = repo.de_empleado_entre(datos.empleado_id, datos.fecha, datos.fecha).get(datos.fecha)
+    MarcarNovedadDia(
+        empleados=RepositorioEmpleadosSQL(session),
+        periodos=RepositorioPeriodosSQL(session),
+        turnos=RepositorioTurnosSQL(session),
+        novedades=repo,
+    ).ejecutar(datos.empleado_id, datos.fecha, datos.tipo)
+    auditar(session, usuario.email, "actualizar", "novedad_dia",
+            f"{datos.empleado_id}:{datos.fecha.isoformat()}",
+            antes={"tipo": antes}, despues={"tipo": datos.tipo})
 
 
 # --- Turnos ---
@@ -784,6 +837,7 @@ def _caso_liquidar(session: Session) -> LiquidarQuincena:
         liquidaciones=RepositorioLiquidacionesSQL(session),
         conceptos_manuales=RepositorioConceptosManualesSQL(session),
         ajustes_quincena=RepositorioAjustesQuincenaSQL(session),
+        novedades_dia=RepositorioNovedadesDiaSQL(session),
     )
 
 

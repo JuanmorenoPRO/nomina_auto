@@ -12,7 +12,7 @@ como liquidado es un paso explícito aparte (ver `MarcarPeriodoLiquidado`).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -87,8 +87,9 @@ class RepositorioAjustesQuincena(Protocol):
     - `sin_extras`: no calcular horas extra por turno; solo cobrar extra sobre el
       excedente del presupuesto quincenal (el empleado concentró horas para
       descansar otros días sin superar el tope de la quincena).
-    - `auxilio_por_dias_laborados`: prorratear el auxilio de transporte en
-      proporción a lo laborado en vez de pagar el quincenal plano.
+    - `auxilio_por_dias_laborados`: pagar el auxilio de transporte por días
+      (15 − días incapacitados / no laborados / no remunerados) y pagarlo aunque el
+      empleado esté incapacitado u ocasional.
     - `pagar_dia_31`: reconocer aparte las horas no-extra del día 31, que el
       presupuesto de 15 días de la quincena no cubre.
     - `no_devengar_auxilio`: excepción contable puntual — no pagar auxilio de
@@ -108,6 +109,15 @@ class RepositorioAjustesQuincena(Protocol):
     def dias_no_remunerados(self, empleado_id: UUID, periodo_id: UUID) -> int: ...
 
 
+class RepositorioNovedadesDia(Protocol):
+    """Puerto: novedad de los días sin turno del cuadro de turnos (incapacidad /
+    no laboró). Un día sin novedad es un descanso. Ver `dominio/valores/novedad_dia.py`."""
+
+    def de_empleado_entre(
+        self, empleado_id: UUID, desde: date, hasta: date
+    ) -> dict[date, str]: ...
+
+
 @dataclass(frozen=True)
 class LiquidarQuincena:
     periodos: RepositorioPeriodos
@@ -119,6 +129,7 @@ class LiquidarQuincena:
     liquidaciones: RepositorioLiquidaciones
     conceptos_manuales: RepositorioConceptosManuales
     ajustes_quincena: RepositorioAjustesQuincena
+    novedades_dia: RepositorioNovedadesDia
 
     def ejecutar(self, periodo_id: UUID, unidad_id: UUID) -> LiquidacionQuincena:
         periodo = self.periodos.obtener(periodo_id)
@@ -167,8 +178,8 @@ class LiquidarQuincena:
                 self.conceptos_manuales.de_empleado_en_periodo(empleado.id, periodo_id)
             )
             incompleta = self.ajustes_quincena.quincena_incompleta(empleado.id, periodo_id)
-            # El prorrateo del auxilio lo hace el dominio sobre las horas no-extra
-            # efectivamente laboradas; aquí solo se transmite la marca.
+            # El auxilio por días lo calcula el dominio (15 − días que no lo generan);
+            # aquí solo se transmite la marca.
             por_dias = self.ajustes_quincena.auxilio_por_dias_laborados(empleado.id, periodo_id)
             # El día 31 queda fuera del presupuesto (la quincena se paga como 15 días);
             # el dominio decide qué horas de ese día reconocer.
@@ -178,14 +189,26 @@ class LiquidarQuincena:
             no_seg_social = self.ajustes_quincena.no_descontar_seguridad_social(
                 empleado.id, periodo_id
             )
+            # Días sin turno marcados como incapacidad / no laboró: le quitan días al
+            # auxilio. Una marca en un día que tiene turno se ignora (el turno manda:
+            # ese día sí se trabajó).
+            con_turno = {r.turno.fecha for r in registrados}
+            dias_sin_auxilio = {
+                fecha: tipo
+                for fecha, tipo in self.novedades_dia.de_empleado_entre(
+                    empleado.id, periodo.fecha_inicio, periodo.fecha_fin
+                ).items()
+                if fecha not in con_turno
+            }
             resultado = liquidar(
                 clasificados,
                 empleado.salario_base,
                 conjunto,
                 periodo.fecha_inicio,
-                # La marca manual manda: prorratear paga el auxilio aunque el empleado
-                # esté incapacitado u ocasional (se incapacitó a mitad de quincena, pero
-                # alcanzó a trabajar unos días y esos sí generan auxilio). Pero
+                # La marca manual manda: «por días laborados» paga el auxilio aunque el
+                # empleado esté incapacitado u ocasional (se incapacitó a mitad de
+                # quincena, pero alcanzó a trabajar unos días y esos sí generan auxilio).
+                # Pero
                 # `no_devengar_auxilio` es la excepción contable y gana sobre todo lo demás.
                 incluir_auxilio_transporte=not no_auxilio
                 and (por_dias or not (empleado.incapacitado or empleado.ocasional)),
@@ -198,6 +221,7 @@ class LiquidarQuincena:
                 dias_no_remunerados=self.ajustes_quincena.dias_no_remunerados(
                     empleado.id, periodo_id
                 ),
+                dias_sin_auxilio=dias_sin_auxilio,
             )
             por_empleado.append(LiquidacionEmpleado(empleado=empleado, liquidacion=resultado))
 
